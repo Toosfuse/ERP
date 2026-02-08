@@ -71,12 +71,15 @@
             </div>
         </div>
             <div style="display:flex;justify-content:center; gap:6px; border-top:none; padding:12px 15px; background:linear-gradient(135deg, rgba(102, 126, 234, 0.9) 0%, rgba(118, 75, 162, 0.95) 100%); border-bottom:1px solid rgba(255,255,255,0.1);">
+                <button type="button" id="closeModalBtn" class="close-modal-btn" style="display:none;" title="بستن">
+                    <i class="fa fa-times"></i>
+                </button>
             <button type="button" id="newChatBtn" class="new-chat-btn" title="چت جدید">
                 <i class="fa fa-pencil"></i>
             </button>
-            <button type="button" id="newGroupBtn" class="new-chat-btn" title="گروه جدید">
+          @*   <button type="button" id="newGroupBtn" class="new-chat-btn" title="گروه جدید">
                 <i class="fa fa-users"></i>
-            </button>
+            </button> *@
             <button type="button" id="notificationToggleBtn" class="notification-toggle-btn active" title="اطلاعات فعال">
                 <i class="fa fa-bell"></i>
             </button>
@@ -86,9 +89,7 @@
             <button type="button" id="logoutBtn" class="logout-btn" title="خروج">
                 <i class="fa fa-sign-out"></i>
             </button>
-            <button type="button" id="closeModalBtn" class="close-modal-btn" style="display:none;" title="بستن">
-                <i class="fa fa-times"></i>
-            </button>
+           
         </div>
         <div class="all-users-modal" id="allUsersModal" style="display:none;">
             <div class="modal-body" id="allUsersList"></div>
@@ -99,7 +100,8 @@
         </div>
         <div class="tab-buttons">
             <button type="button" id="tabUsers" class="tab-btn active">کاربران</button>
-            <button type="button" id="tabGroups" class="tab-btn">گروهها</button>
+@*             <button type="button" id="tabGroups" class="tab-btn">گروهها</button>
+ *@       
         </div>
         <div class="users-list" id="usersList">
             @foreach (var user in Model)
@@ -133,9 +135,9 @@
                 <input type="text" id="searchMessages" placeholder="جستجو در پیام ها..." style="width:100%; padding:8px 12px; border:1px solid rgba(255,255,255,0.3); border-radius:20px; background:rgba(255,255,255,0.1); color:white; font-size:12px;" />
             </div>
             <div class="chat-actions" style="justify-content: flex-start;">
-                <button type="button" id="groupMembersBtn" class="restore-chat-btn" title="اعضای گروه" style="display:none;">
-                    <i class="fa fa-users"></i>
-                </button>
+                 @* <button type="button" id="groupMembersBtn" class="restore-chat-btn" title="اعضای گروه" style="display:none;">
+                   <i class="fa fa-users"></i>
+                </button> *@
                 <button type="button" id="restoreChatBtn" class="restore-chat-btn" title="بازیابی چت" style="display:none;">
                     <i class="fa fa-undo"></i>
                 </button>
@@ -601,6 +603,8 @@
     }
 </script>
 <script src="~/js/chat.js"></script>
+<script src="~/js/chat-refresh.js"></script>
+<script src="~/js/chat-update.js"></script>
 
 </body>
 </html>

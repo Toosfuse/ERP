@@ -83,7 +83,7 @@ $(document).ready(function() {
             });
         } else {
             userItem.prependTo('.users-list');
-            updateUserLastMessage(otherUserId, msg.message);
+            userItem.find('.last-message').text(msg.message);
         }
     });
 

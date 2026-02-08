@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using ERP.Data;
 using ERP.Models;
@@ -31,7 +31,7 @@ namespace ERP.Controllers
         public async Task<IActionResult> Index()
         {
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var users = await GetChatUsers(currentUserId);
+            var users = await GetChatUsersInternal(currentUserId);
             return View(users);
         }
 
@@ -147,6 +147,8 @@ namespace ERP.Controllers
                     replyToSenderName = replyToSenderName
                 };
 
+                await _hubContext.Clients.User(currentUserId).SendAsync("RefreshUsersList");
+                await _hubContext.Clients.User(receiverId).SendAsync("RefreshUsersList");
                 await _hubContext.Clients.User(receiverId).SendAsync("ReceiveMessage", messageData);
                 await _hubContext.Clients.User(currentUserId).SendAsync("ReceiveMessage", messageData);
                 
@@ -500,6 +502,14 @@ namespace ERP.Controllers
             return Json(users);
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetChatUsers()
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var users = await GetChatUsersInternal(currentUserId);
+            return Json(users);
+        }
+
         private async Task<List<ChatUser>> GetChatUsers(string currentUserId)
         {
             var userMessages = await _context.Users
@@ -529,6 +539,11 @@ namespace ERP.Controllers
             })
             .OrderByDescending(u => u.LastMessageTime)
             .ToList();
+        }
+
+        private async Task<List<ChatUser>> GetChatUsersInternal(string currentUserId)
+        {
+            return await GetChatUsers(currentUserId);
         }
     }
 }
