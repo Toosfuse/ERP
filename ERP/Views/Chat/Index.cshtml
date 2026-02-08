@@ -89,6 +89,12 @@
             <button type="button" id="logoutBtn" class="logout-btn" title="خروج">
                 <i class="fa fa-sign-out"></i>
             </button>
+            @if (User.Identity?.Name == "user2")
+            {
+                <button type="button" id="newChatBtn" class="new-chat-btn" title="سطح دسترسی">
+                        <i class="fa fa-user-o"></i>
+                </button>
+            }
            
         </div>
         <div class="all-users-modal" id="allUsersModal" style="display:none;">

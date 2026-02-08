@@ -320,7 +320,6 @@ namespace ERP.Controllers
             
             await _context.SaveChangesAsync();
             
-            // بررسی اینکه آیا پیامی برای نمایش باقی مانده یا نه
             var hasVisibleMessages = await _context.ChatMessages
                 .AnyAsync(m => ((m.SenderId == currentUserId && m.ReceiverId == userId && !m.IsDeletedBySender) ||
                                (m.SenderId == userId && m.ReceiverId == currentUserId && !m.IsDeletedByReceiver)));
@@ -410,44 +409,6 @@ namespace ERP.Controllers
             }
         }
 
-        //[HttpPost]
-        //public async Task<IActionResult> UploadFile(IFormFile file)
-        //{
-        //    try
-        //    {
-        //        if (file == null || file.Length == 0)
-        //            return Json(new { success = false, error = "فایل انتخاب نشده" });
-
-        //        const long maxFileSize = 20 * 1024 * 1024;
-        //        if (file.Length > maxFileSize)
-        //            return Json(new { success = false, error = "حجم فایل نباید بیشتر از 20 مگابایت باشد" });
-
-        //        var uploadsFolder = Path.Combine(_environment.WebRootPath, "uploads", "chat");
-        //        Directory.CreateDirectory(uploadsFolder);
-
-        //        var extension = Path.GetExtension(file.FileName);
-        //        var fileName = Guid.NewGuid() + extension;
-        //        var filePath = Path.Combine(uploadsFolder, fileName);
-
-        //        using (var stream = new FileStream(filePath, FileMode.Create))
-        //        {
-        //            await file.CopyToAsync(stream);
-        //        }
-
-        //        return Json(new
-        //        {
-        //            success = true,
-        //            path = $"/uploads/chat/{fileName}",
-        //            name = file.FileName
-        //        });
-        //    }
-        //    catch
-        //    {
-        //        return Json(new { success = false, error = "خطا در آپلود فایل" });
-        //    }
-        //}
-
-
         [HttpGet]
         public async Task<IActionResult> SearchUsers(string query)
         {
@@ -455,8 +416,14 @@ namespace ERP.Controllers
             
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             
+            var blockedUsers = await _context.ChatAccesses
+                .Where(c => c.UserId == currentUserId && c.IsBlocked)
+                .Select(c => c.AllowedUserId)
+                .ToListAsync();
+            
             var users = await _context.Users
                 .Where(u => u.Id != currentUserId && 
+                       !blockedUsers.Contains(u.Id) &&
                        (u.FirstName.Contains(query) || u.LastName.Contains(query)))
                 .Select(u => new {
                     id = u.Id,
@@ -490,8 +457,13 @@ namespace ERP.Controllers
         {
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             
+            var blockedUsers = await _context.ChatAccesses
+                .Where(c => c.UserId == currentUserId && c.IsBlocked)
+                .Select(c => c.AllowedUserId)
+                .ToListAsync();
+            
             var users = await _context.Users
-                .Where(u => u.Id != currentUserId)
+                .Where(u => u.Id != currentUserId && !blockedUsers.Contains(u.Id))
                 .Select(u => new {
                     id = u.Id,
                     name = u.FirstName + " " + u.LastName,
@@ -510,10 +482,60 @@ namespace ERP.Controllers
             return Json(users);
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> BlockUser(string userId)
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            
+            var existing = await _context.ChatAccesses
+                .FirstOrDefaultAsync(c => c.UserId == currentUserId && c.AllowedUserId == userId);
+            
+            if (existing == null)
+            {
+                _context.ChatAccesses.Add(new ChatAccess 
+                { 
+                    UserId = currentUserId, 
+                    AllowedUserId = userId, 
+                    IsBlocked = true 
+                });
+            }
+            else
+            {
+                existing.IsBlocked = true;
+            }
+            
+            await _context.SaveChangesAsync();
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UnblockUser(string userId)
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            
+            var access = await _context.ChatAccesses
+                .FirstOrDefaultAsync(c => c.UserId == currentUserId && c.AllowedUserId == userId);
+            
+            if (access != null)
+            {
+                access.IsBlocked = false;
+                await _context.SaveChangesAsync();
+            }
+            
+            return Json(new { success = true });
+        }
+
         private async Task<List<ChatUser>> GetChatUsers(string currentUserId)
         {
+            var blockedUsers = await _context.ChatAccesses
+                .Where(c => c.UserId == currentUserId && c.IsBlocked)
+                .Select(c => c.AllowedUserId)
+                .ToListAsync();
+
             var userMessages = await _context.Users
-                .Where(u => u.Id != currentUserId)
+                .Where(u => u.Id != currentUserId && !blockedUsers.Contains(u.Id))
                 .Select(u => new {
                     User = u,
                     LastMessage = _context.ChatMessages

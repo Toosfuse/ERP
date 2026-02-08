@@ -1,4 +1,4 @@
-﻿using ERP.Models;
+using ERP.Models;
 using ERP.Models.asset;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +11,7 @@ namespace ERP.Data
 {
     public class ERPContext : IdentityDbContext<Users, Roles, string>
     {
+
 
 
         public ERPContext(DbContextOptions<ERPContext> options) : base(options)
@@ -71,6 +72,7 @@ namespace ERP.Data
         public DbSet<Channel> Channels { get; set; }
         public DbSet<ChannelMember> ChannelMembers { get; set; }
         public DbSet<ChannelMessage> ChannelMessages { get; set; }
+        public DbSet<ChatAccess> ChatAccesses { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -305,6 +307,24 @@ namespace ERP.Data
                       .WithMany()
                       .HasForeignKey(e => e.ReceiverId)
                       .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ---------------- ChatAccess ----------------
+            builder.Entity<ChatAccess>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.HasOne(e => e.User)
+                      .WithMany()
+                      .HasForeignKey(e => e.UserId)
+                      .OnDelete(DeleteBehavior.NoAction);
+
+                entity.HasOne(e => e.AllowedUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.AllowedUserId)
+                      .OnDelete(DeleteBehavior.NoAction);
+
+                entity.HasIndex(e => new { e.UserId, e.AllowedUserId }).IsUnique();
             });
         }
     }

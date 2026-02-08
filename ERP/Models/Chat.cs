@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace ERP.Models
 {
@@ -38,5 +38,17 @@ namespace ERP.Models
         public int UnreadCount { get; set; }
         public DateTime? LastMessageTime { get; set; }
         public string? LastMessage { get; set; }
+    }
+
+    public class ChatAccess
+    {
+        public int Id { get; set; }
+        public string UserId { get; set; }
+        public string AllowedUserId { get; set; }
+        public bool IsBlocked { get; set; } = false;
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        
+        public Users User { get; set; }
+        public Users AllowedUser { get; set; }
     }
 }

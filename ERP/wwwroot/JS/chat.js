@@ -1037,3 +1037,32 @@ $(document).on('click', '.delete-message-btn[data-group]', function(e) {
         });
     }
 });
+
+$(document).on('contextmenu', '.user-item', function(e) {
+    e.preventDefault();
+    const userId = $(this).data('user-id');
+    const userName = $(this).data('user-name');
+    
+    const menu = `
+        <div class="context-menu" style="position:fixed; top:${e.pageY}px; left:${e.pageX}px; background:white; border:1px solid #ddd; border-radius:4px; box-shadow:0 2px 8px rgba(0,0,0,0.15); z-index:10000;">
+            <button class="block-user-btn" data-user-id="${userId}" style="display:block; width:100%; padding:8px 12px; border:none; background:none; text-align:right; cursor:pointer; font-size:14px;">مسدود کردن</button>
+        </div>
+    `;
+    
+    $('body').append(menu);
+    
+    $(document).one('click', function() {
+        $('.context-menu').remove();
+    });
+});
+
+$(document).on('click', '.block-user-btn', function() {
+    const userId = $(this).data('user-id');
+    $.post('/Chat/BlockUser', { userId: userId, __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() }, function(result) {
+        if (result.success) {
+            $(`.user-item[data-user-id="${userId}"]`).remove();
+            alert('کاربر مسدود شد');
+        }
+    });
+    $('.context-menu').remove();
+});
