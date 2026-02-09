@@ -298,5 +298,11 @@ namespace ERP.Controllers
 
             return RedirectToAction("Index");
         }
+
+        public IActionResult AccessControl(string userId = null)
+        {
+            ViewBag.UserId = userId;
+            return View();
+        }
     }
 }

@@ -417,13 +417,13 @@ namespace ERP.Controllers
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             
             var blockedUsers = await _context.ChatAccesses
-                .Where(c => c.UserId == currentUserId && c.IsBlocked)
+                .Where(c => c.UserId == currentUserId && !c.IsBlocked)
                 .Select(c => c.AllowedUserId)
                 .ToListAsync();
             
             var users = await _context.Users
                 .Where(u => u.Id != currentUserId && 
-                       !blockedUsers.Contains(u.Id) &&
+                       blockedUsers.Contains(u.Id) &&
                        (u.FirstName.Contains(query) || u.LastName.Contains(query)))
                 .Select(u => new {
                     id = u.Id,
@@ -458,12 +458,12 @@ namespace ERP.Controllers
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             
             var blockedUsers = await _context.ChatAccesses
-                .Where(c => c.UserId == currentUserId && c.IsBlocked)
+                .Where(c => c.UserId == currentUserId && !c.IsBlocked)
                 .Select(c => c.AllowedUserId)
                 .ToListAsync();
             
             var users = await _context.Users
-                .Where(u => u.Id != currentUserId && !blockedUsers.Contains(u.Id))
+                .Where(u => u.Id != currentUserId && blockedUsers.Contains(u.Id))
                 .Select(u => new {
                     id = u.Id,
                     name = u.FirstName + " " + u.LastName,
@@ -529,13 +529,21 @@ namespace ERP.Controllers
 
         private async Task<List<ChatUser>> GetChatUsers(string currentUserId)
         {
+            var allowedUserIds = await _context.ChatAccesses
+                .Where(c => c.UserId == currentUserId && !c.IsBlocked)
+                .Select(c => c.AllowedUserId)
+                .ToListAsync();
+
+            if (!allowedUserIds.Any())
+                return new List<ChatUser>();
+
             var blockedUsers = await _context.ChatAccesses
                 .Where(c => c.UserId == currentUserId && c.IsBlocked)
                 .Select(c => c.AllowedUserId)
                 .ToListAsync();
 
             var userMessages = await _context.Users
-                .Where(u => u.Id != currentUserId && !blockedUsers.Contains(u.Id))
+                .Where(u => allowedUserIds.Contains(u.Id) && !blockedUsers.Contains(u.Id))
                 .Select(u => new {
                     User = u,
                     LastMessage = _context.ChatMessages
@@ -566,6 +574,178 @@ namespace ERP.Controllers
         private async Task<List<ChatUser>> GetChatUsersInternal(string currentUserId)
         {
             return await GetChatUsers(currentUserId);
+        }
+
+        public IActionResult AccessControl(string userId = null)
+        {
+            ViewBag.UserId = userId;
+            return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddChatAccess(string allowedUserId)
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            
+            var existing = await _context.ChatAccesses
+                .FirstOrDefaultAsync(c => c.UserId == currentUserId && c.AllowedUserId == allowedUserId);
+            
+            if (existing == null)
+            {
+                _context.ChatAccesses.Add(new ChatAccess 
+                { 
+                    UserId = currentUserId, 
+                    AllowedUserId = allowedUserId, 
+                    IsBlocked = false 
+                });
+                await _context.SaveChangesAsync();
+            }
+            
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemoveChatAccess(string allowedUserId)
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            
+            var access = await _context.ChatAccesses
+                .FirstOrDefaultAsync(c => c.UserId == currentUserId && c.AllowedUserId == allowedUserId);
+            
+            if (access != null)
+            {
+                _context.ChatAccesses.Remove(access);
+                await _context.SaveChangesAsync();
+            }
+            
+            return Json(new { success = true });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetUserAllowedUsers(string userId)
+        {
+            var allowedUserIds = await _context.ChatAccesses
+                .Where(c => c.UserId == userId && !c.IsBlocked)
+                .Select(c => c.AllowedUserId)
+                .ToListAsync();
+            
+            var allowed = await _context.Users
+                .Where(u => allowedUserIds.Contains(u.Id))
+                .Select(u => new {
+                    id = u.Id,
+                    name = u.FirstName + " " + u.LastName,
+                    image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image
+                })
+                .ToListAsync();
+            
+            var available = await _context.Users
+                .Where(u => u.Id != userId && !allowedUserIds.Contains(u.Id))
+                .Select(u => new {
+                    id = u.Id,
+                    name = u.FirstName + " " + u.LastName,
+                    image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image
+                })
+                .ToListAsync();
+            
+            return Json(new { allowed, available });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddChatAccessForUser(string userId, string allowedUserId)
+        {
+            var existing = await _context.ChatAccesses
+                .FirstOrDefaultAsync(c => c.UserId == userId && c.AllowedUserId == allowedUserId);
+            
+            if (existing == null)
+            {
+                _context.ChatAccesses.Add(new ChatAccess 
+                { 
+                    UserId = userId, 
+                    AllowedUserId = allowedUserId, 
+                    IsBlocked = false 
+                });
+                await _context.SaveChangesAsync();
+            }
+            
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemoveChatAccessForUser(string userId, string allowedUserId)
+        {
+            var access = await _context.ChatAccesses
+                .FirstOrDefaultAsync(c => c.UserId == userId && c.AllowedUserId == allowedUserId);
+            
+            if (access != null)
+            {
+                _context.ChatAccesses.Remove(access);
+                await _context.SaveChangesAsync();
+            }
+            
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddMultipleChatAccess(string userId, List<string> allowedUserIds)
+        {
+            foreach (var allowedUserId in allowedUserIds)
+            {
+                var existing = await _context.ChatAccesses
+                    .FirstOrDefaultAsync(c => c.UserId == userId && c.AllowedUserId == allowedUserId);
+                
+                if (existing == null)
+                {
+                    _context.ChatAccesses.Add(new ChatAccess 
+                    { 
+                        UserId = userId, 
+                        AllowedUserId = allowedUserId, 
+                        IsBlocked = false 
+                    });
+                }
+            }
+            await _context.SaveChangesAsync();
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RemoveAllChatAccess(string userId)
+        {
+            var accesses = await _context.ChatAccesses
+                .Where(c => c.UserId == userId)
+                .ToListAsync();
+            
+            _context.ChatAccesses.RemoveRange(accesses);
+            await _context.SaveChangesAsync();
+            
+            return Json(new { success = true });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAllowedUsers()
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            
+            var allowedUserIds = await _context.ChatAccesses
+                .Where(c => c.UserId == currentUserId && !c.IsBlocked)
+                .Select(c => c.AllowedUserId)
+                .ToListAsync();
+            
+            var users = await _context.Users
+                .Where(u => allowedUserIds.Contains(u.Id))
+                .Select(u => new {
+                    id = u.Id,
+                    name = u.FirstName + " " + u.LastName,
+                    image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image
+                })
+                .ToListAsync();
+            
+            return Json(users);
         }
     }
 }

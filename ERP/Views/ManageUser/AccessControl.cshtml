@@ -1,0 +1,90 @@
+@{
+    ViewData["Title"] = "مدیریت سطح دسترسی چت";
+    var preSelectedUserId = ViewBag.UserId as string;
+}
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/CSS/manage-chat-access.css">
+    <link rel="stylesheet" href="~/Fonts/font-awesome-4.7.0/css/font-awesome.min.css">
+</head>
+<body>
+    <div class="page-wrapper">
+        <div class="access-header">
+            <div class="header-content">
+                <div class="header-left">
+                    <i class="fa fa-comments-o header-icon"></i>
+                    <div>
+                        <h1>مدیریت سطح دسترسی چت</h1>
+                        <p>تعیین کاربرانی که میتوانند با <strong id="selectedUserNameHeader">...</strong> گفتگو کنند</p>
+                    </div>
+                </div>
+                <a href="/ManageUser/Index" class="btn-back">
+                    <i class="fa fa-arrow-left"></i>
+                    بازگشت
+                </a>
+            </div>
+        </div>
+
+        <div class="access-container">
+            <div class="panel available-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <i class="fa fa-users"></i>
+                        <h3>کاربران موجود</h3>
+                        <span class="badge" id="availableCount">0</span>
+                    </div>
+                    <div class="search-box">
+                        <i class="fa fa-search"></i>
+                        <input type="text" id="searchAvailableUsers" placeholder="جستجو..." />
+                    </div>
+                </div>
+                <div class="panel-body" id="availableUsersList">
+                    <div class="loading">
+                        <i class="fa fa-spinner fa-spin"></i>
+                        <p>در حال بارگذاری...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="transfer-controls">
+                <button id="selectAllBtn" class="btn-transfer" title="انتقال همه به راست">
+                    <i class="fa fa-angle-double-left"></i>
+                </button>
+                <button id="removeAllBtn" class="btn-transfer" title="انتقال همه به چپ">
+                    <i class="fa fa-angle-double-right"></i>
+                </button>
+            </div>
+
+            <div class="panel allowed-panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <i class="fa fa-check-circle"></i>
+                        <h3>اعضای مجاز</h3>
+                        <span class="badge badge-success" id="allowedCount">0</span>
+                    </div>
+                    <div class="search-box">
+                        <i class="fa fa-search"></i>
+                        <input type="text" id="searchAllowedUsers" placeholder="جستجو..." />
+                    </div>
+                </div>
+                <div class="panel-body" id="allowedUsersList">
+                    <div class="empty-state">
+                        <i class="fa fa-user-times"></i>
+                        <p>هیچ کاربری اضافه نشده است</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @Html.AntiForgeryToken()
+    <input type="hidden" id="preSelectedUserId" value="@preSelectedUserId" />
+    <script src="~/JS/jquery-3.6.0.min.js"></script>
+    <script src="~/JS/manage-chat-access.js"></script>
+</body>
+</html>
