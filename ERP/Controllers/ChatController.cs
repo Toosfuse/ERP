@@ -95,6 +95,12 @@ namespace ERP.Controllers
 
                 var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 
+                var hasAccess = await _context.ChatAccesses
+                    .AnyAsync(c => c.UserId == currentUserId && c.AllowedUserId == receiverId && !c.IsBlocked);
+                
+                if (!hasAccess)
+                    return Json(new { success = false, error = "شما مجاز به ارسال پیام به این کاربر نیستید" });
+                
                 string replyToMessage = null;
                 string replyToSenderName = null;
                 
@@ -146,8 +152,6 @@ namespace ERP.Controllers
                     replyToSenderName = replyToSenderName
                 };
 
-                await _hubContext.Clients.User(currentUserId).SendAsync("RefreshUsersList");
-                await _hubContext.Clients.User(receiverId).SendAsync("RefreshUsersList");
                 await _hubContext.Clients.User(receiverId).SendAsync("ReceiveMessage", messageData);
                 await _hubContext.Clients.User(currentUserId).SendAsync("ReceiveMessage", messageData);
                 
@@ -189,6 +193,12 @@ namespace ERP.Controllers
             {
                 message.IsDelivered = true;
                 message.DeliveredAt = DateTime.Now;
+                
+                if (message.IsRead && message.ReadAt.HasValue)
+                {
+                    message.DeliveredAt = message.ReadAt.Value.AddSeconds(-1);
+                }
+                
                 await _context.SaveChangesAsync();
                 
                 await _hubContext.Clients.User(message.SenderId).SendAsync("MessageDelivered", new { id = messageId });
@@ -444,11 +454,16 @@ namespace ERP.Controllers
             var user = await _context.Users.FindAsync(userId);
             if (user == null) return NotFound();
             
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var hasAccess = await _context.ChatAccesses
+                .AnyAsync(c => c.UserId == currentUserId && c.AllowedUserId == userId && !c.IsBlocked);
+            
             return Json(new {
                 id = user.Id,
                 name = user.FirstName + " " + user.LastName,
                 image = string.IsNullOrEmpty(user.Image) ? "/UserImage/Male.png" : "/UserImage/" + user.Image,
-                isOnline = false
+                isOnline = false,
+                hasAccess = hasAccess
             });
         }
 
@@ -529,13 +544,12 @@ namespace ERP.Controllers
 
         private async Task<List<ChatUser>> GetChatUsers(string currentUserId)
         {
-            var allowedUserIds = await _context.ChatAccesses
-                .Where(c => c.UserId == currentUserId && !c.IsBlocked)
-                .Select(c => c.AllowedUserId)
+            var usersWithMessages = await _context.ChatMessages
+                .Where(m => (m.SenderId == currentUserId && !m.IsDeletedBySender) ||
+                           (m.ReceiverId == currentUserId && !m.IsDeletedByReceiver))
+                .Select(m => m.SenderId == currentUserId ? m.ReceiverId : m.SenderId)
+                .Distinct()
                 .ToListAsync();
-
-            if (!allowedUserIds.Any())
-                return new List<ChatUser>();
 
             var blockedUsers = await _context.ChatAccesses
                 .Where(c => c.UserId == currentUserId && c.IsBlocked)
@@ -543,7 +557,7 @@ namespace ERP.Controllers
                 .ToListAsync();
 
             var userMessages = await _context.Users
-                .Where(u => allowedUserIds.Contains(u.Id) && !blockedUsers.Contains(u.Id))
+                .Where(u => usersWithMessages.Contains(u.Id) && !blockedUsers.Contains(u.Id))
                 .Select(u => new {
                     User = u,
                     LastMessage = _context.ChatMessages
@@ -554,7 +568,6 @@ namespace ERP.Controllers
                     UnreadCount = _context.ChatMessages
                         .Count(m => m.SenderId == u.Id && m.ReceiverId == currentUserId && !m.IsRead && !m.IsDeletedByReceiver)
                 })
-                .Where(x => x.LastMessage != null)
                 .ToListAsync();
 
             return userMessages.Select(x => new ChatUser

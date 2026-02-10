@@ -11,7 +11,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>چت مسنجر سازمانی</title>
-    <link rel="stylesheet" href="~/Fonts/font-awesome-4.7.0/css/font-awesome.min.css">
+    <link href="~/fonts/fontawesome-free-7.1.0-web/css/all.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="~/css/chat.css" />
     <style>
         * {
@@ -38,6 +38,20 @@
             cursor: pointer;
             font-weight: 600;
             transition: all 0.3s ease;
+        }
+        .refresh-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            background: #667eea;
+            color: white;
+            font-size: 12px;
+        }
+        .refresh-btn:hover {
+            background: #5568d3;
         }
         .tab-btn.active {
             background: #667eea;
@@ -84,7 +98,7 @@
                 <i class="fa fa-bell"></i>
             </button>
             <button type="button" id="darkModeBtn" class="dark-mode-btn" title="حالت تاریک">
-                <i class="fa fa-moon-o"></i>
+                <i class="fa fa-moon"></i>
             </button>
             <button type="button" id="logoutBtn" class="logout-btn" title="خروج">
                 <i class="fa fa-sign-out"></i>
@@ -100,6 +114,9 @@
         </div>
         <div class="tab-buttons">
             <button type="button" id="tabUsers" class="tab-btn active">کاربران</button>
+            <button type="button" id="refreshBtn" class="refresh-btn" onclick="window.location.href='@Url.Action("Index", "Chat")'">
+                <i class="fa fa-refresh"></i> بروزرسانی
+            </button>
 @*             <button type="button" id="tabGroups" class="tab-btn">گروهها</button>
  *@       
         </div>
@@ -171,7 +188,7 @@
                 <i class="fa fa-paperclip"></i>
             </button>
             <button type="button" id="emojiBtn" class="emoji-btn">
-                <i class="fa fa-smile-o"></i>
+                <i class="fa fa-smile"></i>
             </button>
             <input type="file" id="fileInput" style="display:none;" />
             <div class="emoji-picker" id="emojiPicker" style="display:none;">

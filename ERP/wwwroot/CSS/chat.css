@@ -830,9 +830,9 @@ body.dark-mode .forward-user-item:hover {
 }
 
 .message:not(.mine) .message-content {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(240, 248, 255, 0.85) 100%);
-    color: #2c3e50;
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: linear-gradient(135deg, rgba(255, 140, 0, 0.85) 0%, rgba(255, 165, 0, 0.9) 100%);
+    color: white;
+    border: 1px solid rgba(255, 140, 0, 0.5);
     border-bottom-left-radius: 5px;
     margin-right: 50px;
     backdrop-filter: blur(15px);
@@ -846,7 +846,7 @@ body.dark-mode .forward-user-item:hover {
     width: 0;
     height: 0;
     border: 8px solid transparent;
-    border-right-color: rgba(240, 248, 255, 0.85);
+    border-right-color: rgba(255, 165, 0, 0.9);
     border-bottom: none;
     border-left: none;
 }
@@ -863,11 +863,11 @@ body.dark-mode .forward-user-item:hover {
 }
 
 .message.mine .message-time {
-    color: rgba(255, 255, 255, 0.9);
+    color: #e5e5e5;
 }
 
 .message:not(.mine) .message-time {
-    color: #666;
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .message-status {
@@ -1023,7 +1023,7 @@ body.dark-mode .forward-user-item:hover {
 
 .reply-sender {
     font-weight: 600;
-    color: rgba(102, 126, 234, 0.9);
+    color: rgba(230, 126, 34, 0.9);
     margin-bottom: 4px;
 }
 
@@ -1489,5 +1489,5 @@ body.dark-mode .forward-user-item:hover {
 
 .forward-user-item .user-name {
     font-weight: 600;
-    color: #333;
+    color: #ff8c00;
 }

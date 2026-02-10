@@ -1,8 +1,9 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
 using ERP.Data;
 using ERP.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Security.Claims;
 
 namespace ERP.Controllers
@@ -21,18 +22,33 @@ namespace ERP.Controllers
         {
             return View();
         }
+        public DateTime ShamsiStringToMiladi(string shamsiDate)
+        {
+            // جدا کردن سال، ماه، روز (فرمت yyyy/MM/dd یا yyyy/M/d)
+            string[] parts = shamsiDate.Replace("۰", "0").Replace("۱", "1") // تبدیل ارقام فارسی به انگلیسی اگر لازم بود
+                                       .Replace("۲", "2").Replace("۳", "3").Replace("۴", "4")
+                                       .Replace("۵", "5").Replace("۶", "6").Replace("۷", "7")
+                                       .Replace("۸", "8").Replace("۹", "9")
+                                       .Split('/', '-');
 
+            int year = int.Parse(parts[0]);
+            int month = int.Parse(parts[1]);
+            int day = int.Parse(parts[2]);
+
+            PersianCalendar pc = new PersianCalendar();
+            return pc.ToDateTime(year, month, day, 0, 0, 0, 0);
+        }
         [HttpGet]
-        public async Task<IActionResult> GetActiveConversations(DateTime? fromDate, DateTime? toDate, bool? isOnline, bool? isRead)
+        public async Task<IActionResult> GetActiveConversations(string fromDate, string toDate, bool? isOnline, bool? isRead)
         {
             try
             {
                 var query = _context.ChatMessages.AsQueryable();
 
-                if (fromDate.HasValue)
-                    query = query.Where(m => m.SentAt.Date >= fromDate.Value.Date);
-                if (toDate.HasValue)
-                    query = query.Where(m => m.SentAt.Date <= toDate.Value.Date);
+                if (!string.IsNullOrEmpty(fromDate))
+                    query = query.Where(m => m.SentAt.Date >= ShamsiStringToMiladi(fromDate).Date);
+                if (!string.IsNullOrEmpty(toDate))
+                    query = query.Where(m => m.SentAt.Date <= ShamsiStringToMiladi(toDate).Date);
                 if (isRead.HasValue)
                     query = query.Where(m => m.IsRead == isRead.Value);
 
@@ -103,16 +119,16 @@ namespace ERP.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetConversationMessages(string user1Id, string user2Id, DateTime? fromDate, DateTime? toDate, bool? isRead)
+        public async Task<IActionResult> GetConversationMessages(string user1Id, string user2Id, string? fromDate, string? toDate, bool? isRead)
         {
             var query = _context.ChatMessages
                 .Where(m => (m.SenderId == user1Id && m.ReceiverId == user2Id) ||
                            (m.SenderId == user2Id && m.ReceiverId == user1Id));
 
-            if (fromDate.HasValue)
-                query = query.Where(m => m.SentAt.Date >= fromDate.Value.Date);
-            if (toDate.HasValue)
-                query = query.Where(m => m.SentAt.Date <= toDate.Value.Date);
+            if (!string.IsNullOrEmpty(fromDate))
+                query = query.Where(m => m.SentAt.Date >= ShamsiStringToMiladi(fromDate).Date);
+            if (!string.IsNullOrEmpty(toDate))
+                query = query.Where(m => m.SentAt.Date <= ShamsiStringToMiladi(toDate).Date);
             if (isRead.HasValue)
                 query = query.Where(m => m.IsRead == isRead.Value);
 

@@ -10,7 +10,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@ViewData["Title"]</title>
     <link rel="stylesheet" href="~/CSS/chat-monitoring.css">
-    <link rel="stylesheet" href="~/Fonts/font-awesome-4.7.0/css/font-awesome.min.css">
+
+    <link href="~/fonts/fontawesome-free-7.1.0-web/css/all.min.css" rel="stylesheet" />
+ 
+    <link href="~/jalalidatepicker/jalalidatepicker.css" rel="stylesheet" />
 </head>
 <body>
     <div class="monitoring-container">
@@ -49,7 +52,7 @@
                 </div>
             </div>
             <div class="stat-card">
-                <i class="fa fa-clock-o"></i>
+                <i class="fa fa-clock"></i>
                 <div>
                     <span class="stat-value" id="messagesLast24h">0</span>
                     <span class="stat-label">24 ساعت گذشته</span>
@@ -67,11 +70,21 @@
         <div class="filter-bar " style="margin-bottom:5px">
             <div class="filter-group">
                 <label><i class="fa fa-calendar"></i> از تاریخ:</label>
-                <input type="date" id="fromDate" />
+                <input type="text" name="RegDatePersian" id="fromDate"
+                       class="form-control form-control-lg input-ltr shadow-sm"
+                      
+                       value="@ViewBag.RegDatePersian"
+                       maxlength="10" required data-jdp />
+              
             </div>
             <div class="filter-group">
                 <label><i class="fa fa-calendar"></i> تا تاریخ:</label>
-                <input type="date" id="toDate" />
+                <input type="text" name="RegDatePersian" id="toDate"
+                       class="form-control form-control-lg input-ltr shadow-sm"
+                      
+                       value="@ViewBag.RegDatePersian"
+                       maxlength="10" required data-jdp />
+             
             </div>
             <div class="filter-group">
                 <label><i class="fa fa-circle"></i> وضعیت:</label>
@@ -130,9 +143,15 @@
             </div>
         </div>
     </div>
-
+    @section Scripts {
+    <script src="~/jalalidatepicker/jalalidatepicker.min.js"></script>
     <script src="~/JS/jquery-3.6.0.min.js"></script>
     <script src="~/SignalR/signalr.min.js"></script>
     <script src="~/JS/chat-monitoring.js"></script>
+        <script>
+                    jalaliDatepicker.startWatch();
+          </script>
+                    
+    }
 </body>
 </html>

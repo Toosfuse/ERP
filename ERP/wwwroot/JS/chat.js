@@ -32,6 +32,10 @@ $(document).ready(function() {
         .then(() => console.log('SignalR متصل شد'))
         .catch(err => console.error('خطا:', err));
 
+    connection.on("RefreshUsersList", function () {
+        window.location.reload();
+    });
+
     connection.on("UserOnline", function (userId) {
         var selector = '.user-item[data-user-id="' + userId + '"] .online-status';
         $(selector).addClass('online');
@@ -50,8 +54,10 @@ $(document).ready(function() {
     });
 
     connection.on("ReceiveMessage", function (msg) {
+        const otherUserId = msg.senderId === myUserId ? msg.receiverId : msg.senderId;
+        const isMine = msg.senderId === myUserId;
+        
         if (currentUserId && (msg.senderId === currentUserId || msg.receiverId === currentUserId)) {
-            const isMine = msg.senderId === myUserId;
             addMessageToChat(msg, isMine);
             scrollToBottom();
             
@@ -60,12 +66,13 @@ $(document).ready(function() {
                 markAsRead(msg.senderId);
                 showNotification(msg);
             }
+        } else if (msg.receiverId === myUserId) {
+            showNotification(msg);
         }
         
-        const otherUserId = msg.senderId === myUserId ? msg.receiverId : msg.senderId;
         const userItem = $(`.user-item[data-user-id="${otherUserId}"]`);
         
-        if (userItem.length === 0) {
+        if (userItem.length === 0 && msg.receiverId === myUserId) {
             $.get('/Chat/GetUserInfo', { userId: otherUserId }, function(user) {
                 const newUserHtml = `
                     <div class="user-item" data-user-id="${user.id}" data-user-name="${user.name}">
@@ -77,13 +84,22 @@ $(document).ready(function() {
                             <div class="user-name">${user.name}</div>
                             <div class="last-message">${msg.message}</div>
                         </div>
+                        <div class="unread-count">1</div>
                     </div>
                 `;
                 $('.users-list').prepend(newUserHtml);
             });
-        } else {
+        } else if (userItem.length > 0) {
             userItem.prependTo('.users-list');
             userItem.find('.last-message').text(msg.message);
+            if (msg.receiverId === myUserId && currentUserId !== otherUserId) {
+                const unreadEl = userItem.find('.unread-count');
+                if (unreadEl.length) {
+                    unreadEl.text(parseInt(unreadEl.text()) + 1);
+                } else {
+                    userItem.append('<div class="unread-count">1</div>');
+                }
+            }
         }
     });
 
@@ -264,12 +280,12 @@ $(document).ready(function() {
         $('body').toggleClass('dark-mode');
         var isDarkMode = $('body').hasClass('dark-mode');
         localStorage.setItem('darkMode', isDarkMode);
-        $(this).find('i').toggleClass('fa-moon-o fa-sun-o');
+        $(this).find('i').toggleClass('fa-moon fa-sun');
     });
 
     if (localStorage.getItem('darkMode') === 'true') {
         $('body').addClass('dark-mode');
-        $('#darkModeBtn').find('i').removeClass('fa-moon-o').addClass('fa-sun-o');
+        $('#darkModeBtn').find('i').removeClass('fa-moon').addClass('fa-sun');
     }
 
     $('#searchMessages').on('input', function() {
@@ -455,6 +471,19 @@ function selectUser(element) {
     $('#groupMembersBtn').hide();
     
     element.find('.unread-count').remove();
+    
+    $.get('/Chat/GetUserInfo', { userId: userId }, function(data) {
+        const hasAccess = data.hasAccess;
+        if (!hasAccess) {
+            $('#messageInput').prop('disabled', true).attr('placeholder', 'شما مجاز به ارسال پیام نیستید');
+            $('#sendBtn').prop('disabled', true);
+            $('#attachBtn').prop('disabled', true);
+        } else {
+            $('#messageInput').prop('disabled', false).attr('placeholder', 'پیام خود را بنویسید...');
+            $('#sendBtn').prop('disabled', false);
+            $('#attachBtn').prop('disabled', false);
+        }
+    });
     
     loadMessages(currentUserId);
     markAsRead(currentUserId);

@@ -215,6 +215,7 @@ function renderMessages(messages) {
         const isDeleted = msg.isDeletedBySender || msg.isDeletedByReceiver;
         const messageBg = isDeleted ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.2) 100%)' : (isSender ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(102, 126, 234, 0.12) 100%)' : 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.12) 100%)');
         const borderColor = isDeleted ? '#ef4444' : (isSender ? '#667eea' : '#f59e0b');
+        const messageAlign = isSender ? 'margin-right:auto;margin-left:60%;' : 'margin-left:auto;margin-right:60%;';
         
         let replyHtml = '';
         if (msg.replyToMessageId && msg.replyToMessage) {
@@ -229,7 +230,7 @@ function renderMessages(messages) {
         const deletedLabel = isDeleted ? '<span style="color:#ef4444;font-size:11px;font-weight:600;margin-right:8px;"><i class="fa fa-trash"></i> حذف شده</span>' : '';
         
         html += `
-            <div class="message-item" data-message-id="${msg.id}" style="background:${messageBg};border-right-color:${borderColor};">
+            <div class="message-item" data-message-id="${msg.id}" style="background:${messageBg};border-right-color:${borderColor};max-width:40%;${messageAlign}border-radius:12px;">
                 <div class="message-header">
                     <span class="message-sender" style="color:${borderColor};font-weight:600;">
                         <i class="fa fa-user" style="margin-left:5px;"></i>${senderName}
@@ -261,8 +262,9 @@ function addMessageToList(msg) {
     const senderName = isSender ? selectedConversation.user1Name : selectedConversation.user2Name;
     const messageBg = isSender ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(102, 126, 234, 0.12) 100%)' : 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.12) 100%)';
     const borderColor = isSender ? '#667eea' : '#f59e0b';
+    const messageAlign = isSender ? 'margin-right:auto;margin-left:60%;' : 'margin-left:auto;margin-right:60%;';
     const html = `
-        <div class="message-item" data-message-id="${msg.id}" style="background:${messageBg};border-right-color:${borderColor};">
+        <div class="message-item" data-message-id="${msg.id}" style="background:${messageBg};border-right-color:${borderColor};max-width:40%;${messageAlign}border-radius:12px;">
             <div class="message-header">
                 <span class="message-sender" style="color:${borderColor};font-weight:600;">
                     <i class="fa fa-user" style="margin-left:5px;"></i>${senderName}
