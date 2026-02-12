@@ -146,6 +146,12 @@ $(document).ready(function() {
         $(`.message[data-message-id="${data.id}"] .message-text`).text(data.message);
     });
 
+    connection.on("UpdateUnreadCount", function (count) {
+        if (window.chrome && window.chrome.webview) {
+            window.chrome.webview.postMessage({ type: 'unreadCount', count: count });
+        }
+    });
+
     $('#searchUser').on('input', function() {
         const searchText = $(this).val().trim();
         

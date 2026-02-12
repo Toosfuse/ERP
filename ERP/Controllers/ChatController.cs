@@ -155,6 +155,10 @@ namespace ERP.Controllers
                 await _hubContext.Clients.User(receiverId).SendAsync("ReceiveMessage", messageData);
                 await _hubContext.Clients.User(currentUserId).SendAsync("ReceiveMessage", messageData);
                 
+                var unreadCount = await _context.ChatMessages
+                    .CountAsync(m => m.ReceiverId == receiverId && !m.IsRead && !m.IsDeletedByReceiver);
+                await _hubContext.Clients.User(receiverId).SendAsync("UpdateUnreadCount", unreadCount);
+                
                 return Json(new { success = true, messageId = chatMessage.Id });
             }
             catch (Exception ex)
@@ -180,6 +184,10 @@ namespace ERP.Controllers
             await _context.SaveChangesAsync();
             
             await _hubContext.Clients.User(userId).SendAsync("MessagesRead", currentUserId);
+            
+            var unreadCount = await _context.ChatMessages
+                .CountAsync(m => m.ReceiverId == currentUserId && !m.IsRead && !m.IsDeletedByReceiver);
+            await _hubContext.Clients.User(currentUserId).SendAsync("UpdateUnreadCount", unreadCount);
             
             return Json(new { success = true });
         }
@@ -759,6 +767,14 @@ namespace ERP.Controllers
                 .ToListAsync();
             
             return Json(users);
+        }
+        [HttpGet]
+        public async Task<IActionResult> GetUnreadCount()
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var count = await _context.ChatMessages
+                .CountAsync(m => m.ReceiverId == currentUserId && !m.IsRead && !m.IsDeletedByReceiver);
+            return Json(new { unreadCount = count });
         }
     }
 }

@@ -136,5 +136,10 @@ namespace ERP.Hubs
         {
             await Clients.Group($"group-{groupId}").SendAsync("GroupMessageEdited", new { id = messageId, message = message });
         }
+
+        public async Task NotifyUnreadCount(string userId, int count)
+        {
+            await Clients.Group(userId).SendAsync("UpdateUnreadCount", count);
+        }
     }
 }

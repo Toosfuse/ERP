@@ -62,13 +62,14 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.ExpireTimeSpan = TimeSpan.FromDays(60);
     
     // Cookie نباید در client-side قابل دسترسی باشد
-    options.Cookie.HttpOnly = true;
+    options.Cookie.HttpOnly = false;
     
     // Cookie تنها در HTTPS ارسال شود
-    options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.None;
     
     // Cookie essential است
     options.Cookie.IsEssential = true;
+    options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
 });
 
 // Database Context - SQL Server
