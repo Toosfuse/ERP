@@ -46,8 +46,10 @@ $(document).ready(function() {
         const isMine = msg.senderId === myUserId;
         
         if (currentUserId && (msg.senderId === currentUserId || msg.receiverId === currentUserId)) {
-            addMessageToChat(msg, isMine);
-            scrollToBottom();
+            if (currentUserId === otherUserId) {
+                addMessageToChat(msg, isMine);
+                scrollToBottom();
+            }
             
             if (!isMine) {
                 markMessageDelivered(msg.id);
@@ -108,13 +110,15 @@ $(document).ready(function() {
             .html('<i class="fa fa-check"></i><i class="fa fa-check" style="margin-right:-8px"></i>');
     });
 
-    connection.on("MessagesRead", function (userId) {
-        $(`.message.mine .message-status`)
-            .removeClass('delivered')
-            .addClass('read')
-            .html('<i class="fa fa-check"></i><i class="fa fa-check" style="margin-right:-8px"></i>');
-        $(`.message.mine[data-message-id]`).removeClass('editable');
-        $(`.message.mine .edit-btn`).remove();
+    connection.on("MessagesRead", function (senderId, receiverId) {
+        if (senderId === currentUserId || receiverId === myUserId) {
+            $(`.message.mine .message-status`)
+                .removeClass('delivered')
+                .addClass('read')
+                .html('<i class="fa fa-check"></i><i class="fa fa-check" style="margin-right:-8px"></i>');
+            $(`.message.mine[data-message-id]`).removeClass('editable');
+            $(`.message.mine .edit-btn`).remove();
+        }
     });
 
     connection.on("ReceiveGroupMessage", function (msg) {
@@ -808,11 +812,17 @@ function hideTypingIndicator(userId) {
 }
 
 function markAsRead(userId) {
-    $.post('/Chat/MarkAsRead', { userId: userId });
+    $.post('/Chat/MarkAsRead', { 
+        userId: userId,
+        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+    });
 }
 
 function markMessageDelivered(messageId) {
-    $.post('/Chat/MarkAsDelivered', { messageId: messageId });
+    $.post('/Chat/MarkAsDelivered', { 
+        messageId: messageId,
+        __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+    });
 }
 
 function deleteChat() {
@@ -893,6 +903,7 @@ function forwardMessage(messageId, userId) {
         if (result.success) {
             $('#forwardModal').removeClass('show');
             alert('پیام با موفقیت انتقال یافت');
+            window.reload();
         } else {
             alert(result.error || 'خطا در انتقال پیام');
         }

@@ -43,6 +43,8 @@ namespace ERP.Controllers
                     if (!guest.GroupId.HasValue)
                         return RedirectToAction("GuestLogin");
 
+                    ViewBag.GuestToken = guestToken;
+
                     var userIdsInGroup = await _context.UserGroups
                         .Where(ug => ug.GroupID == guest.GroupId.Value)
                         .Select(ug => ug.UserID)
@@ -178,7 +180,7 @@ namespace ERP.Controllers
             verificationCode.AttemptCount++;
 
             var existingGuest = await _context.GuestUsers
-                .FirstOrDefaultAsync(g => g.PhoneNumber == phoneNumber && g.IsActive && g.ExpiryDate > DateTime.Now);
+                .FirstOrDefaultAsync(g => g.PhoneNumber == phoneNumber);
 
             if (existingGuest != null)
             {
@@ -187,6 +189,7 @@ namespace ERP.Controllers
                 existingGuest.GroupId = groupId;
                 existingGuest.FirstName = firstName;
                 existingGuest.LastName = lastName;
+                existingGuest.IsActive = true;
                 await _context.SaveChangesAsync();
 
                 Response.Cookies.Append("GuestToken", existingGuest.UniqueToken, new CookieOptions
@@ -232,7 +235,7 @@ namespace ERP.Controllers
             try
             {
                 var existingGuest = await _context.GuestUsers
-                    .FirstOrDefaultAsync(g => g.PhoneNumber == phoneNumber && g.IsActive && g.ExpiryDate > DateTime.Now);
+                    .FirstOrDefaultAsync(g => g.PhoneNumber == phoneNumber);
 
                 if (existingGuest != null)
                 {
@@ -241,6 +244,7 @@ namespace ERP.Controllers
                     existingGuest.GroupId = groupId;
                     existingGuest.FirstName = firstName;
                     existingGuest.LastName = lastName;
+                    existingGuest.IsActive = true;
                     await _context.SaveChangesAsync();
 
                     Response.Cookies.Append("GuestToken", existingGuest.UniqueToken, new CookieOptions
@@ -434,49 +438,18 @@ namespace ERP.Controllers
                 var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
                 
                 // Check if receiver is a guest
-                if (receiverId.StartsWith("guest_") || receiverId.Length > 36)
+                var isReceiverGuest = await _context.GuestUsers
+                    .AnyAsync(g => g.UniqueToken == receiverId && g.IsActive);
+                
+                if (!isReceiverGuest)
                 {
-                    var sanitizer2 = new HtmlSanitizer();
-                    var sanitizedMessage2 = sanitizer2.Sanitize(message);
+                    // Check access only for company users
+                    var hasAccess = await _context.ChatAccesses
+                        .AnyAsync(c => c.UserId == currentUserId && c.AllowedUserId == receiverId && !c.IsBlocked);
                     
-                    var guestMessage2 = new ChatMessage
-                    {
-                        SenderId = currentUserId,
-                        ReceiverId = receiverId,
-                        Message = sanitizedMessage2,
-                        SentAt = DateTime.Now,
-                        IsRead = false,
-                        AttachmentPath = attachmentPath,
-                        AttachmentName = attachmentName
-                    };
-                    
-                    _context.ChatMessages.Add(guestMessage2);
-                    await _context.SaveChangesAsync();
-                    
-                    var messageData2 = new
-                    {
-                        id = guestMessage2.Id,
-                        senderId = currentUserId,
-                        receiverId = receiverId,
-                        message = sanitizedMessage2,
-                        sentAt = guestMessage2.SentAt.ToString("HH:mm"),
-                        dateAt = _services.iGregorianToPersian(guestMessage2.SentAt),
-                        isDelivered = false,
-                        isRead = false,
-                        attachmentPath = attachmentPath,
-                        attachmentName = attachmentName
-                    };
-                    
-                    await _hubContext.Clients.All.SendAsync("ReceiveMessage", messageData2);
-                    
-                    return Json(new { success = true, messageId = guestMessage2.Id });
+                    if (!hasAccess)
+                        return Json(new { success = false, error = "شما مجاز به ارسال پیام به این کاربر نیستید" });
                 }
-                
-                var hasAccess = await _context.ChatAccesses
-                    .AnyAsync(c => c.UserId == currentUserId && c.AllowedUserId == receiverId && !c.IsBlocked);
-                
-                if (!hasAccess)
-                    return Json(new { success = false, error = "شما مجاز به ارسال پیام به این کاربر نیستید" });
                 
                 string replyToMessage = null;
                 string replyToSenderName = null;
@@ -544,10 +517,26 @@ namespace ERP.Controllers
         }
 
         [HttpPost]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> MarkAsRead(string userId)
         {
-            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var guestToken = Request.Cookies["GuestToken"];
+            string currentUserId;
+            
+            if (!string.IsNullOrEmpty(guestToken))
+            {
+                var guest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+                if (guest != null)
+                    currentUserId = guestToken;
+                else
+                    return Json(new { success = false });
+            }
+            else
+            {
+                currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            }
             
             var unreadMessages = await _context.ChatMessages
                 .Where(m => m.SenderId == userId && m.ReceiverId == currentUserId && !m.IsRead)
@@ -559,16 +548,13 @@ namespace ERP.Controllers
             });
             await _context.SaveChangesAsync();
             
-            await _hubContext.Clients.User(userId).SendAsync("MessagesRead", currentUserId);
-            
-            var unreadCount = await _context.ChatMessages
-                .CountAsync(m => m.ReceiverId == currentUserId && !m.IsRead && !m.IsDeletedByReceiver);
-            await _hubContext.Clients.User(currentUserId).SendAsync("UpdateUnreadCount", unreadCount);
+            await _hubContext.Clients.All.SendAsync("MessagesRead", userId, currentUserId);
             
             return Json(new { success = true });
         }
 
         [HttpPost]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> MarkAsDelivered(int messageId)
         {
@@ -585,16 +571,33 @@ namespace ERP.Controllers
                 
                 await _context.SaveChangesAsync();
                 
-                await _hubContext.Clients.User(message.SenderId).SendAsync("MessageDelivered", new { id = messageId });
+                await _hubContext.Clients.All.SendAsync("MessageDelivered", new { id = messageId });
             }
             return Json(new { success = true });
         }
 
         [HttpPost]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditMessage(int messageId, string newMessage)
         {
-            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var guestToken = Request.Cookies["GuestToken"];
+            string currentUserId;
+            
+            if (!string.IsNullOrEmpty(guestToken))
+            {
+                var guest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+                if (guest != null)
+                    currentUserId = guestToken;
+                else
+                    return Json(new { success = false, error = "احراز هویت نشده" });
+            }
+            else
+            {
+                currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            }
+            
             var message = await _context.ChatMessages.FindAsync(messageId);
             
             if (message == null || message.SenderId != currentUserId)
@@ -611,7 +614,7 @@ namespace ERP.Controllers
             message.EditedAt = DateTime.Now;
             await _context.SaveChangesAsync();
             
-            await _hubContext.Clients.User(message.ReceiverId).SendAsync("MessageEdited", new { 
+            await _hubContext.Clients.All.SendAsync("MessageEdited", new { 
                 id = messageId, 
                 message = sanitizedMessage,
                 editedAt = message.EditedAt
@@ -690,8 +693,7 @@ namespace ERP.Controllers
                     forwardedFromMessageId = messageId
                 };
 
-                await _hubContext.Clients.User(receiverId).SendAsync("ReceiveMessage", messageData);
-                await _hubContext.Clients.User(currentUserId).SendAsync("ReceiveMessage", messageData);
+                await _hubContext.Clients.All.SendAsync("ReceiveMessage", messageData);
                 
                 return Json(new { success = true, messageId = forwardedMessage.Id });
             }
@@ -731,7 +733,7 @@ namespace ERP.Controllers
                 })
                 .ToListAsync();
 
-            var guestTokens = userIdsWithMessages.Where(id => id.Length > 36).ToList();
+            var guestTokens = userIdsWithMessages.ToList();
 
             foreach (var token in guestTokens)
             {
@@ -816,10 +818,27 @@ namespace ERP.Controllers
         }
 
         [HttpPost]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteMessage(int messageId)
         {
-            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var guestToken = Request.Cookies["GuestToken"];
+            string currentUserId;
+            
+            if (!string.IsNullOrEmpty(guestToken))
+            {
+                var guest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+                if (guest != null)
+                    currentUserId = guestToken;
+                else
+                    return Json(new { success = false, error = "احراز هویت نشده" });
+            }
+            else
+            {
+                currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            }
+            
             var message = await _context.ChatMessages.FindAsync(messageId);
             
             if (message == null || message.SenderId != currentUserId)

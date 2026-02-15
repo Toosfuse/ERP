@@ -310,7 +310,7 @@
 <script src="~/JS/jquery-3.6.0.min.js"></script>
 <script src="~/SignalR/signalr.min.js"></script>
 <script>
-    window.myUserId = '@User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier)';
+    window.myUserId = '@(ViewBag.GuestToken ?? User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier))';
     window.currentUserName = '@(User.Identity?.Name ?? "کاربر")';
     window.currentUserImage = '@(ViewBag.CurrentUserImage ?? "/UserImage/Male.png")';
     
