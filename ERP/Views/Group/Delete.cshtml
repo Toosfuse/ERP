@@ -1,0 +1,18 @@
+﻿@model ERP.Models.Group
+
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-danger text-white text-center">
+            <h4 class="mb-0">حذف گروه</h4>
+        </div>
+        <div class="card-body">
+            <h5>آیا مطمئن هستید که می‌خواهید گروه "@Model.Name" را حذف کنید؟</h5>
+            <form asp-action="Delete">
+                <input type="hidden" asp-for="GroupID" />
+                <button type="submit" class="btn btn-danger">حذف</button>
+                <a asp-action="Index" class="btn btn-secondary">لغو</a>
+            </form>
+        </div>
+    </div>
+</div>
+

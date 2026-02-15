@@ -7,7 +7,7 @@ using System.Security.Claims;
 
 namespace ERP.Hubs
 {
-    [Authorize]
+    [AllowAnonymous]
     public class ChatHub : Hub
     {
         private readonly ERPContext _context;

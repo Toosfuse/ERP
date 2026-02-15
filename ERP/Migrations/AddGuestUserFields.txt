@@ -1,0 +1,9 @@
+در Package Manager Console این دستورات را اجرا کنید:
+
+Add-Migration AddGuestUserFields
+Update-Database
+
+یا در CMD/PowerShell:
+
+dotnet ef migrations add AddGuestUserFields
+dotnet ef database update

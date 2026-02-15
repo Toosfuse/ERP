@@ -24,9 +24,6 @@ namespace ERP.Models
         public string? ReplyToMessage { get; set; }
         public string? ReplyToSenderName { get; set; }
         public int? ForwardedFromMessageId { get; set; }
-        
-        public Users Sender { get; set; }
-        public Users Receiver { get; set; }
     }
 
     public class ChatUser

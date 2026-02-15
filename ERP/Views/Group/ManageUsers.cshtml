@@ -1,0 +1,124 @@
+﻿@model ERP.Controllers.ManageUsersViewModel
+
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white text-center">
+            <h4 class="mb-0">مدیریت کاربران گروه: @Model.GroupName</h4>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- لیست کاربران غیرعضو (چپ) -->
+                <div class="col-md-6">
+                    <h5 class="text-center">کاربران غیرعضو</h5>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="non-members-search" placeholder="جستجوی کاربران غیرعضو..." dir="rtl">
+                        <div class="input-group-append">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        </div>
+                    </div>
+                    <div class="list-group" id="non-members">
+                        @foreach (var user in Model.NonMembers)
+                        {
+                            <div class="list-group-item list-group-item-action" style="cursor: pointer;" data-user-id="@user.UserID" data-group-id="@Model.GroupID" onclick="toggleUser(this)">
+                                <input type="checkbox" class="user-checkbox" data-user-id="@user.UserID" data-group-id="@Model.GroupID" style="display: none;">
+                                <span>@user.FullName</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <!-- لیست کاربران عضو (راست) -->
+                <div class="col-md-6">
+                    <h5 class="text-center">کاربران عضو گروه</h5>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="members-search" placeholder="جستجوی کاربران عضو..." dir="rtl">
+                        <div class="input-group-append">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        </div>
+                    </div>
+                    <div class="list-group" id="members">
+                        @foreach (var user in Model.Members)
+                        {
+                            <div class="list-group-item list-group-item-action" style="cursor: pointer;" data-user-id="@user.UserID" data-group-id="@Model.GroupID" onclick="toggleUser(this)">
+                                <input type="checkbox" class="user-checkbox" data-user-id="@user.UserID" data-group-id="@Model.GroupID" checked style="display: none;">
+                                <span>@user.FullName</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="mt-3 text-center">
+                <a asp-action="Index" class="btn btn-secondary">بازگشت</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .list-group-item {
+        transition: all 0.3s ease;
+    }
+
+        .list-group-item:hover {
+            background-color: #f1f1f1;
+        }
+</style>
+
+<script>
+    // جستجو برای کاربران غیرعضو
+    $('#non-members-search').on('input', function () {
+        var searchText = $(this).val().toLowerCase();
+        $('#non-members .list-group-item').each(function () {
+            var userName = $(this).find('span').text().toLowerCase();
+            $(this).toggle(userName.includes(searchText));
+        });
+    });
+
+    // جستجو برای کاربران عضو
+    $('#members-search').on('input', function () {
+        var searchText = $(this).val().toLowerCase();
+        $('#members .list-group-item').each(function () {
+            var userName = $(this).find('span').text().toLowerCase();
+            $(this).toggle(userName.includes(searchText));
+        });
+    });
+
+    // جابه‌جایی کاربر با انیمیشن
+    function toggleUser(item) {
+        var checkbox = $(item).find('.user-checkbox');
+        var userId = checkbox.data('user-id');
+        var groupId = checkbox.data('group-id');
+        var isChecked = checkbox.is(':checked');
+
+        // تغییر حالت چک‌باکس
+        checkbox.prop('checked', !isChecked);
+
+        // انیمیشن fadeOut قبل از جابه‌جایی
+        $(item).fadeOut(300, function () {
+            // ارسال درخواست AJAX
+            var url = !isChecked ? '@Url.Action("AddUserToGroup", "Group")' : '@Url.Action("RemoveUserFromGroup", "Group")';
+            $.ajax({
+                url: url,
+                type: 'POST',
+                data: { groupId: groupId, userId: userId },
+                success: function (response) {
+                    if (response.success) {
+                        // جابه‌جایی آیتم با انیمیشن fadeIn
+                        var listItem = $(item);
+                        var targetList = !isChecked ? $('#members') : $('#non-members');
+                        targetList.append(listItem);
+                        listItem.fadeIn(300);
+                    } else {
+                        alert('خطا در به‌روزرسانی عضویت.');
+                        checkbox.prop('checked', isChecked); // بازگشت به حالت قبلی
+                        $(item).fadeIn(300); // نمایش دوباره آیتم
+                    }
+                },
+                error: function () {
+                    alert('خطا در ارتباط با سرور.');
+                    checkbox.prop('checked', isChecked); // بازگشت به حالت قبلی
+                    $(item).fadeIn(300); // نمایش دوباره آیتم
+                }
+            });
+        });
+    }
+</script>

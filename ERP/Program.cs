@@ -84,6 +84,7 @@ builder.Services.AddDbContext<EMPContext>(options =>
 
 builder.Services.AddScoped<LookupService>();
 builder.Services.AddScoped<IServices,Services>();
+builder.Services.AddScoped<ISmsService, SmsService>();
 
 // Kendo UI
 builder.Services.AddKendo();

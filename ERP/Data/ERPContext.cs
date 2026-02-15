@@ -65,6 +65,8 @@ namespace ERP.Data
         public DbSet<Asset> Assets { get; set; }
         public DbSet<AssetProperty> AssetProperties { get; set; }
         public DbSet<AssetHistory> AssetHistories { get; set; }
+
+
         public DbSet<ChatMessage> ChatMessages { get; set; }
         public DbSet<ChatGroup> ChatGroups { get; set; }
         public DbSet<GroupMember> GroupMembers { get; set; }
@@ -73,6 +75,10 @@ namespace ERP.Data
         public DbSet<ChannelMember> ChannelMembers { get; set; }
         public DbSet<ChannelMessage> ChannelMessages { get; set; }
         public DbSet<ChatAccess> ChatAccesses { get; set; }
+        
+        public DbSet<GuestUser> GuestUsers { get; set; }
+        public DbSet<GuestVerificationCode> GuestVerificationCodes { get; set; }
+        public DbSet<GuestChatAccess> GuestChatAccesses { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -298,15 +304,7 @@ namespace ERP.Data
             {
                 entity.HasKey(e => e.Id);
 
-                entity.HasOne(e => e.Sender)
-                      .WithMany()
-                      .HasForeignKey(e => e.SenderId)
-                      .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(e => e.Receiver)
-                      .WithMany()
-                      .HasForeignKey(e => e.ReceiverId)
-                      .OnDelete(DeleteBehavior.Restrict);
+             
             });
 
             // ---------------- ChatAccess ----------------
@@ -325,6 +323,37 @@ namespace ERP.Data
                       .OnDelete(DeleteBehavior.NoAction);
 
                 entity.HasIndex(e => new { e.UserId, e.AllowedUserId }).IsUnique();
+            });
+
+            // ---------------- GuestUser ----------------
+            builder.Entity<GuestUser>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.PhoneNumber);
+                entity.HasIndex(e => e.UniqueToken).IsUnique();
+            });
+
+            // ---------------- GuestVerificationCode ----------------
+            builder.Entity<GuestVerificationCode>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.PhoneNumber);
+            });
+
+            // ---------------- GuestChatAccess ----------------
+            builder.Entity<GuestChatAccess>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+
+                entity.HasOne(e => e.GuestUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.GuestUserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.AllowedUser)
+                      .WithMany()
+                      .HasForeignKey(e => e.AllowedUserId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

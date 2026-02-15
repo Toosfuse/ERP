@@ -1,0 +1,202 @@
+@{
+    ViewData["Title"] = "مدیریت دسترسی مهمانان";
+}
+
+<div class="app-title">
+    <div>
+        <h1><i class="fa fa-users"></i> مدیریت دسترسی مهمانان به چت</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="tile">
+            <div class="tile-body">
+                <table class="table table-hover table-bordered" id="guestsTable">
+                    <thead>
+                        <tr>
+                            <th>شماره تماس</th>
+                            <th>نام</th>
+                            <th>تاریخ ایجاد</th>
+                            <th>تاریخ انقضا</th>
+                            <th>آخرین فعالیت</th>
+                            <th>تعداد دسترسی</th>
+                            <th>عملیات</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="accessModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">مدیریت دسترسی مهمان</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>کاربران مجاز</h6>
+                        <div id="allowedUsers" class="user-list"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>کاربران در دسترس</h6>
+                        <div id="availableUsers" class="user-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .user-list {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 10px;
+        border-radius: 5px;
+    }
+    .user-item {
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        margin-bottom: 5px;
+        background: #f8f9fa;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+    .user-item:hover {
+        background: #e9ecef;
+    }
+    .user-item img {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        margin-left: 10px;
+    }
+</style>
+
+@section Scripts {
+    <script>
+        let currentGuestId = null;
+
+        $(document).ready(function() {
+            loadGuests();
+        });
+
+        function loadGuests() {
+            $.get('/GuestChatManagement/GetActiveGuests', function(data) {
+                const tbody = $('#guestsTable tbody');
+                tbody.empty();
+
+                data.forEach(guest => {
+                    tbody.append(`
+                        <tr>
+                            <td>${guest.phoneNumber}</td>
+                            <td>${guest.fullName || 'مهمان'}</td>
+                            <td>${new Date(guest.createdDate).toLocaleString('fa-IR')}</td>
+                            <td>${new Date(guest.expiryDate).toLocaleString('fa-IR')}</td>
+                            <td>${guest.lastActivity ? new Date(guest.lastActivity).toLocaleString('fa-IR') : '-'}</td>
+                            <td>${guest.allowedUsersCount}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" onclick="manageAccess(${guest.id})">
+                                    <i class="fa fa-users"></i> مدیریت دسترسی
+                                </button>
+                                <button class="btn btn-sm btn-warning" onclick="extendAccess(${guest.id})">
+                                    <i class="fa fa-clock"></i> تمدید
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deactivateGuest(${guest.id})">
+                                    <i class="fa fa-ban"></i> غیرفعال
+                                </button>
+                            </td>
+                        </tr>
+                    `);
+                });
+            });
+        }
+
+        function manageAccess(guestId) {
+            currentGuestId = guestId;
+            $.get('/GuestChatManagement/GetGuestAccess', { guestId }, function(data) {
+                renderUsers('allowedUsers', data.allowed, true);
+                renderUsers('availableUsers', data.available, false);
+                $('#accessModal').modal('show');
+            });
+        }
+
+        function renderUsers(containerId, users, isAllowed) {
+            const container = $(`#${containerId}`);
+            container.empty();
+
+            users.forEach(user => {
+                container.append(`
+                    <div class="user-item" onclick="${isAllowed ? 'removeAccess' : 'addAccess'}('${user.id}')">
+                        <img src="${user.image}" alt="${user.name}">
+                        <span>${user.name}</span>
+                    </div>
+                `);
+            });
+        }
+
+        function addAccess(userId) {
+            $.post('/GuestChatManagement/AddGuestAccess', {
+                guestId: currentGuestId,
+                userId: userId,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            }, function(data) {
+                if (data.success) {
+                    manageAccess(currentGuestId);
+                }
+            });
+        }
+
+        function removeAccess(userId) {
+            $.post('/GuestChatManagement/RemoveGuestAccess', {
+                guestId: currentGuestId,
+                userId: userId,
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            }, function(data) {
+                if (data.success) {
+                    manageAccess(currentGuestId);
+                }
+            });
+        }
+
+        function extendAccess(guestId) {
+            const hours = prompt('چند ساعت تمدید شود؟', '2');
+            if (hours) {
+                $.post('/GuestChatManagement/ExtendGuestAccess', {
+                    guestId: guestId,
+                    hours: parseInt(hours),
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                }, function(data) {
+                    if (data.success) {
+                        alert('دسترسی تمدید شد');
+                        loadGuests();
+                    }
+                });
+            }
+        }
+
+        function deactivateGuest(guestId) {
+            if (confirm('آیا مطمئن هستید؟')) {
+                $.post('/GuestChatManagement/DeactivateGuest', {
+                    guestId: guestId,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                }, function(data) {
+                    if (data.success) {
+                        alert('مهمان غیرفعال شد');
+                        loadGuests();
+                    }
+                });
+            }
+        }
+    </script>
+    @Html.AntiForgeryToken()
+}

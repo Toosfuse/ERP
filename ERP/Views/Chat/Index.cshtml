@@ -121,21 +121,31 @@
  *@       
         </div>
         <div class="users-list" id="usersList">
-            @foreach (var user in Model)
+            @if (Model != null && Model.Any())
             {
-                <div class="user-item" data-user-id="@user.Id" data-user-name="@user.Name">
-                    <div class="user-avatar">
-                        <img src="@user.Image" alt="@user.Name" />
-                        <span class="online-status @(user.IsOnline ? "online" : "")"></span>
+                @foreach (var user in Model)
+                {
+                    <div class="user-item" data-user-id="@user.Id" data-user-name="@user.Name">
+                        <div class="user-avatar">
+                            <img src="@user.Image" alt="@user.Name" />
+                            <span class="online-status @(user.IsOnline ? "online" : "")"></span>
+                        </div>
+                        <div class="user-info">
+                            <div class="user-name">@user.Name</div>
+                            <div class="last-message">@(user.LastMessage ?? "پیامی وجود ندارد")</div>
+                        </div>
+                        @if (user.UnreadCount > 0)
+                        {
+                            <div class="unread-count">@user.UnreadCount</div>
+                        }
                     </div>
-                    <div class="user-info">
-                        <div class="user-name">@user.Name</div>
-                        <div class="last-message">@(user.LastMessage ?? "پیامی وجود ندارد")</div>
-                    </div>
-                    @if (user.UnreadCount > 0)
-                    {
-                        <div class="unread-count">@user.UnreadCount</div>
-                    }
+                }
+            }
+            else
+            {
+                <div style="text-align:center; padding:20px; color:#999;">
+                    <i class="fa fa-users" style="font-size:48px; margin-bottom:10px;"></i>
+                    <p>هنوز مکالمه‌ای وجود ندارد</p>
                 </div>
             }
         </div>
@@ -313,10 +323,15 @@
     $.get('/Chat/GetCurrentUserName', function(data) {
         document.getElementById('currentUserDisplay').textContent = data.name;
         window.currentUserName = data.name;
-    });
-    
-    $.get('/Chat/GetUserInfo?userId=' + window.myUserId, function(data) {
-        document.getElementById('currentUserImage').src = data.image;
+        if (data.isGuest) {
+            document.getElementById('currentUserImage').src = '/UserImage/Male.png';
+        } else if (window.myUserId) {
+            $.get('/Chat/GetUserInfo?userId=' + window.myUserId, function(userData) {
+                if (userData.success) {
+                    document.getElementById('currentUserImage').src = userData.image;
+                }
+            });
+        }
     });
 
     window.notificationsEnabled = localStorage.getItem('notificationsEnabled') !== 'false';
@@ -338,6 +353,16 @@
             btn.find('i').removeClass('fa-bell').addClass('fa-bell-slash-o');
         }
     }
+
+    $('#logoutBtn').click(function() {
+        if (confirm('آیا می‌خواهید خارج شوید؟')) {
+            $.post('/Chat/GuestLogout', function(result) {
+                if (result.success) {
+                    window.location.href = '/Chat/GuestLogin';
+                }
+            });
+        }
+    });
 
     $('#tabUsers').click(function() {
         $('#usersList').show();

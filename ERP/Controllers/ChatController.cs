@@ -12,23 +12,82 @@ using Ganss.Xss;
 
 namespace ERP.Controllers
 {
-    [Authorize]
     public class ChatController : Controller
     {
         private readonly ERPContext _context;
         private readonly IWebHostEnvironment _environment;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly IServices _services;
+        private readonly ISmsService _smsService;
 
-        public ChatController(ERPContext context, IWebHostEnvironment environment, IHubContext<ChatHub> hubContext,IServices services)
+        public ChatController(ERPContext context, IWebHostEnvironment environment, IHubContext<ChatHub> hubContext, IServices services, ISmsService smsService)
         {
             _context = context;
             _environment = environment;
             _hubContext = hubContext;
             _services = services;
+            _smsService = smsService;
         }
 
+        [AllowAnonymous]
         public async Task<IActionResult> Index()
+        {
+            var guestToken = Request.Cookies["GuestToken"];
+            if (!string.IsNullOrEmpty(guestToken))
+            {
+                var guest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+
+                if (guest != null)
+                {
+                    if (!guest.GroupId.HasValue)
+                        return RedirectToAction("GuestLogin");
+
+                    var userIdsInGroup = await _context.UserGroups
+                        .Where(ug => ug.GroupID == guest.GroupId.Value)
+                        .Select(ug => ug.UserID)
+                        .ToListAsync();
+
+                    var users = await _context.Users
+                        .Where(u => userIdsInGroup.Contains(u.Id))
+                        .Select(u => new ChatUser
+                        {
+                            Id = u.Id,
+                            Name = u.FirstName + " " + u.LastName,
+                            Image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image,
+                            IsOnline = false,
+                            UnreadCount = 0,
+                            LastMessage = null,
+                            LastMessageTime = null
+                        })
+                        .ToListAsync();
+
+                    return View(users);
+                }
+                else
+                {
+                    return RedirectToAction("GuestLogin");
+                }
+            }
+
+            if (!User.Identity.IsAuthenticated)
+            {
+                return RedirectToAction("GuestLogin");
+            }
+
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var chatUsers = await GetChatUsersInternal(currentUserId);
+            return View(chatUsers);
+        }
+
+        [AllowAnonymous]
+        public IActionResult GuestLogin()
+        {
+            return View();
+        }
+
+        [Authorize]
+        public async Task<IActionResult> UserChat()
         {
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var users = await GetChatUsersInternal(currentUserId);
@@ -38,16 +97,248 @@ namespace ERP.Controllers
         [HttpGet]
         public IActionResult GetCurrentUserName()
         {
+            var guestToken = Request.Cookies["GuestToken"];
+            if (!string.IsNullOrEmpty(guestToken))
+            {
+                var guest = _context.GuestUsers.FirstOrDefault(g => g.UniqueToken == guestToken && g.IsActive);
+                if (guest != null && guest.ExpiryDate > DateTime.Now)
+                {
+                    return Json(new { name = (guest.FirstName + " " + guest.LastName) ?? "مهمان", isGuest = true });
+                }
+            }
+
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var user = _context.Users.FirstOrDefault(u => u.Id == userId);
-            return Json(new { name = user != null ? user.FirstName + " " + user.LastName : "کاربر" });
+            return Json(new { name = user != null ? user.FirstName + " " + user.LastName : "کاربر", isGuest = false });
+        }
+
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SendGuestVerificationCode(string phoneNumber)
+        {
+            if (string.IsNullOrEmpty(phoneNumber) || phoneNumber.Length != 11)
+                return Json(new { success = false, error = "شماره تماس معتبر نیست" });
+
+            var recentCode = await _context.GuestVerificationCodes
+                .Where(c => c.PhoneNumber == phoneNumber && c.CreatedDate > DateTime.Now.AddMinutes(-2))
+                .FirstOrDefaultAsync();
+
+            //if (recentCode != null)
+            //    return Json(new { success = false, error = "کد قبلی هنوز معتبر است" });
+
+            //var code = new Random().Next(10000, 99999).ToString();
+            var code = "12345";
+
+            var verificationCode = new GuestVerificationCode
+            {
+                PhoneNumber = phoneNumber,
+                Code = code,
+                CreatedDate = DateTime.Now,
+                ExpiryDate = DateTime.Now.AddMinutes(5),
+                IsUsed = false,
+                AttemptCount = 0
+            };
+
+            _context.GuestVerificationCodes.Add(verificationCode);
+            await _context.SaveChangesAsync();
+
+            //await _smsService.SendVerificationCode(phoneNumber, code);
+
+            return Json(new { success = true });
         }
 
         [HttpGet]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetGroups()
+        {
+            var groups = await _context.Groups
+                .Where(g => g.GroupID != 4)
+                .Select(g => new { id = g.GroupID, name = g.Name })
+                .ToListAsync();
+            return Json(groups);
+        }
+
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> VerifyGuestCode(string phoneNumber, string code, string firstName, string lastName, int groupId)
+        {
+            var verificationCode = await _context.GuestVerificationCodes
+                .Where(c => c.PhoneNumber == phoneNumber && c.Code == code && !c.IsUsed && c.ExpiryDate > DateTime.Now)
+                .FirstOrDefaultAsync();
+
+            if (verificationCode == null)
+                return Json(new { success = false, error = "کد تایید نامعتبر یا منقضی شده است" });
+
+            if (verificationCode.AttemptCount >= 3)
+                return Json(new { success = false, error = "تعداد تلاش بیش از حد مجاز" });
+
+            verificationCode.IsUsed = true;
+            verificationCode.AttemptCount++;
+
+            var existingGuest = await _context.GuestUsers
+                .FirstOrDefaultAsync(g => g.PhoneNumber == phoneNumber && g.IsActive && g.ExpiryDate > DateTime.Now);
+
+            if (existingGuest != null)
+            {
+                existingGuest.LastActivity = DateTime.Now;
+                existingGuest.ExpiryDate = DateTime.Now.AddHours(2);
+                existingGuest.GroupId = groupId;
+                existingGuest.FirstName = firstName;
+                existingGuest.LastName = lastName;
+                await _context.SaveChangesAsync();
+
+                Response.Cookies.Append("GuestToken", existingGuest.UniqueToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Expires = existingGuest.ExpiryDate
+                });
+
+                return Json(new { success = true, token = existingGuest.UniqueToken });
+            }
+
+            var guestUser = new GuestUser
+            {
+                PhoneNumber = phoneNumber,
+                FirstName = firstName,
+                LastName = lastName,
+                Image = "Male.png",
+                UniqueToken = Guid.NewGuid().ToString(),
+                CreatedDate = DateTime.Now,
+                ExpiryDate = DateTime.Now.AddHours(2),
+                IsActive = true,
+                LastActivity = DateTime.Now,
+                GroupId = groupId
+            };
+
+            _context.GuestUsers.Add(guestUser);
+            await _context.SaveChangesAsync();
+
+            Response.Cookies.Append("GuestToken", guestUser.UniqueToken, new CookieOptions
+            {
+                HttpOnly = true,
+                Expires = guestUser.ExpiryDate
+            });
+
+            return Json(new { success = true, token = guestUser.UniqueToken });
+        }
+
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> GuestDirectLogin(string phoneNumber, string firstName, string lastName, string image, int groupId)
+        {
+            try
+            {
+                var existingGuest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.PhoneNumber == phoneNumber && g.IsActive && g.ExpiryDate > DateTime.Now);
+
+                if (existingGuest != null)
+                {
+                    existingGuest.LastActivity = DateTime.Now;
+                    existingGuest.ExpiryDate = DateTime.Now.AddHours(2);
+                    existingGuest.GroupId = groupId;
+                    existingGuest.FirstName = firstName;
+                    existingGuest.LastName = lastName;
+                    await _context.SaveChangesAsync();
+
+                    Response.Cookies.Append("GuestToken", existingGuest.UniqueToken, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Expires = existingGuest.ExpiryDate
+                    });
+
+                    return Json(new { success = true, token = existingGuest.UniqueToken });
+                }
+
+                var guestUser = new GuestUser
+                {
+                    PhoneNumber = phoneNumber,
+                    FirstName = firstName,
+                    LastName = lastName,
+                    Image = image ?? "Male.png",
+                    UniqueToken = Guid.NewGuid().ToString(),
+                    CreatedDate = DateTime.Now,
+                    ExpiryDate = DateTime.Now.AddHours(2),
+                    IsActive = true,
+                    LastActivity = DateTime.Now,
+                    GroupId = groupId
+                };
+
+                _context.GuestUsers.Add(guestUser);
+                await _context.SaveChangesAsync();
+
+                Response.Cookies.Append("GuestToken", guestUser.UniqueToken, new CookieOptions
+                {
+                    HttpOnly = true,
+                    Expires = guestUser.ExpiryDate
+                });
+
+                return Json(new { success = true, token = guestUser.UniqueToken });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, error = "خطا در ورود: " + ex.Message });
+            }
+        }
+
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetGuestAllowedUsers()
+        {
+            var guestToken = Request.Cookies["GuestToken"];
+            if (string.IsNullOrEmpty(guestToken))
+                return Json(new { success = false, error = "احراز هویت نشده" });
+
+            var guest = await _context.GuestUsers
+                .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+
+            if (guest == null)
+                return Json(new { success = false, error = "دسترسی منقضی شده" });
+
+            guest.LastActivity = DateTime.Now;
+            await _context.SaveChangesAsync();
+
+            var allowedUserIds = await _context.GuestChatAccesses
+                .Where(a => a.GuestUserId == guest.Id)
+                .Select(a => a.AllowedUserId)
+                .ToListAsync();
+
+            var users = await _context.Users
+                .Where(u => allowedUserIds.Contains(u.Id))
+                .Select(u => new {
+                    id = u.Id,
+                    name = u.FirstName + " " + u.LastName,
+                    image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image
+                })
+                .ToListAsync();
+
+            return Json(new { success = true, users });
+        }
+
+        [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetMessages(string userId, int page = 1, int pageSize = 50)
         {
             if (string.IsNullOrEmpty(userId)) return BadRequest();
-            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            var guestToken = Request.Cookies["GuestToken"];
+            string currentUserId;
+            
+            if (!string.IsNullOrEmpty(guestToken))
+            {
+                var guest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+                if (guest != null)
+                    currentUserId = guestToken;
+                else
+                    return Json(new List<object>());
+            }
+            else
+            {
+                currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            }
             
             var messages = await _context.ChatMessages
                 .Where(m => (m.SenderId == currentUserId && m.ReceiverId == userId && !m.IsDeletedBySender) ||
@@ -82,10 +373,12 @@ namespace ERP.Controllers
         }
 
         [HttpPost]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SendMessage(string receiverId, string message, string attachmentPath, string attachmentName, int? replyToMessageId)
         {
             try
+            
             {
                 if (string.IsNullOrEmpty(receiverId))
                     return Json(new { success = false, error = "گیرنده مشخص نشده" });
@@ -93,7 +386,91 @@ namespace ERP.Controllers
                 if (string.IsNullOrEmpty(message) && string.IsNullOrEmpty(attachmentPath))
                     return Json(new { success = false, error = "پیام یا فایل الزامی است" });
 
+                var guestToken = Request.Cookies["GuestToken"];
+                if (!string.IsNullOrEmpty(guestToken))
+                {
+                    var guest = await _context.GuestUsers
+                        .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+
+                    if (guest != null)
+                    {
+                        var guestSanitizer = new HtmlSanitizer();
+                        var guestSanitizedMessage = guestSanitizer.Sanitize(message);
+
+                        var guestMessage = new ChatMessage
+                        {
+                            SenderId = guestToken,
+                            ReceiverId = receiverId,
+                            Message = guestSanitizedMessage,
+                            SentAt = DateTime.Now,
+                            IsRead = false,
+                            AttachmentPath = attachmentPath,
+                            AttachmentName = attachmentName
+                        };
+
+                        _context.ChatMessages.Add(guestMessage);
+                        await _context.SaveChangesAsync();
+
+                        var guestMessageData = new
+                        {
+                            id = guestMessage.Id,
+                            senderId = guestToken,
+                            receiverId = receiverId,
+                            message = guestSanitizedMessage,
+                            sentAt = guestMessage.SentAt.ToString("HH:mm"),
+                            dateAt = _services.iGregorianToPersian(guestMessage.SentAt),
+                            isDelivered = false,
+                            isRead = false,
+                            attachmentPath = attachmentPath,
+                            attachmentName = attachmentName
+                        };
+
+                        await _hubContext.Clients.All.SendAsync("ReceiveMessage", guestMessageData);
+
+                        return Json(new { success = true, messageId = guestMessage.Id });
+                    }
+                }
+
                 var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                
+                // Check if receiver is a guest
+                if (receiverId.StartsWith("guest_") || receiverId.Length > 36)
+                {
+                    var sanitizer2 = new HtmlSanitizer();
+                    var sanitizedMessage2 = sanitizer2.Sanitize(message);
+                    
+                    var guestMessage2 = new ChatMessage
+                    {
+                        SenderId = currentUserId,
+                        ReceiverId = receiverId,
+                        Message = sanitizedMessage2,
+                        SentAt = DateTime.Now,
+                        IsRead = false,
+                        AttachmentPath = attachmentPath,
+                        AttachmentName = attachmentName
+                    };
+                    
+                    _context.ChatMessages.Add(guestMessage2);
+                    await _context.SaveChangesAsync();
+                    
+                    var messageData2 = new
+                    {
+                        id = guestMessage2.Id,
+                        senderId = currentUserId,
+                        receiverId = receiverId,
+                        message = sanitizedMessage2,
+                        sentAt = guestMessage2.SentAt.ToString("HH:mm"),
+                        dateAt = _services.iGregorianToPersian(guestMessage2.SentAt),
+                        isDelivered = false,
+                        isRead = false,
+                        attachmentPath = attachmentPath,
+                        attachmentName = attachmentName
+                    };
+                    
+                    await _hubContext.Clients.All.SendAsync("ReceiveMessage", messageData2);
+                    
+                    return Json(new { success = true, messageId = guestMessage2.Id });
+                }
                 
                 var hasAccess = await _context.ChatAccesses
                     .AnyAsync(c => c.UserId == currentUserId && c.AllowedUserId == receiverId && !c.IsBlocked);
@@ -152,8 +529,7 @@ namespace ERP.Controllers
                     replyToSenderName = replyToSenderName
                 };
 
-                await _hubContext.Clients.User(receiverId).SendAsync("ReceiveMessage", messageData);
-                await _hubContext.Clients.User(currentUserId).SendAsync("ReceiveMessage", messageData);
+                await _hubContext.Clients.All.SendAsync("ReceiveMessage", messageData);
                 
                 var unreadCount = await _context.ChatMessages
                     .CountAsync(m => m.ReceiverId == receiverId && !m.IsRead && !m.IsDeletedByReceiver);
@@ -244,6 +620,28 @@ namespace ERP.Controllers
             return Json(new { success = true });
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetForwardUsers()
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            
+            var allowedUserIds = await _context.ChatAccesses
+                .Where(c => c.UserId == currentUserId && !c.IsBlocked)
+                .Select(c => c.AllowedUserId)
+                .ToListAsync();
+            
+            var users = await _context.Users
+                .Where(u => allowedUserIds.Contains(u.Id))
+                .Select(u => new {
+                    id = u.Id,
+                    name = u.FirstName + " " + u.LastName,
+                    image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image
+                })
+                .ToListAsync();
+            
+            return Json(users);
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ForwardMessage(int messageId, string receiverId)
@@ -301,6 +699,79 @@ namespace ERP.Controllers
             {
                 return Json(new { success = false, error = "خطا در فوروارد پیام" });
             }
+        }
+
+        private async Task<List<ChatUser>> GetChatUsersInternal(string currentUserId)
+        {
+            var userIdsWithMessages = await _context.ChatMessages
+                .Where(m => (m.SenderId == currentUserId || m.ReceiverId == currentUserId) &&
+                           !m.IsDeletedBySender && !m.IsDeletedByReceiver)
+                .Select(m => m.SenderId == currentUserId ? m.ReceiverId : m.SenderId)
+                .Distinct()
+                .ToListAsync();
+
+            var allowedUserIds = await _context.ChatAccesses
+                .Where(c => c.UserId == currentUserId && !c.IsBlocked)
+                .Select(c => c.AllowedUserId)
+                .ToListAsync();
+
+            var filteredUserIds = userIdsWithMessages.Where(id => allowedUserIds.Contains(id) && id.Length <= 36).ToList();
+
+            var users = await _context.Users
+                .Where(u => filteredUserIds.Contains(u.Id))
+                .Select(u => new ChatUser
+                {
+                    Id = u.Id,
+                    Name = u.FirstName + " " + u.LastName,
+                    Image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image,
+                    IsOnline = false,
+                    UnreadCount = 0,
+                    LastMessage = null,
+                    LastMessageTime = null
+                })
+                .ToListAsync();
+
+            var guestTokens = userIdsWithMessages.Where(id => id.Length > 36).ToList();
+
+            foreach (var token in guestTokens)
+            {
+                var guest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.UniqueToken == token && g.IsActive);
+
+                if (guest != null)
+                {
+                    users.Add(new ChatUser
+                    {
+                        Id = token,
+                        Name = (guest.FirstName + " " + guest.LastName) ?? "مهمان",
+                        Image = string.IsNullOrEmpty(guest.Image) ? "/UserImage/Male.png" : "/UserImage/" + guest.Image,
+                        IsOnline = false,
+                        UnreadCount = 0,
+                        LastMessage = null,
+                        LastMessageTime = null
+                    });
+                }
+            }
+
+            foreach (var user in users)
+            {
+                var lastMsg = await _context.ChatMessages
+                    .Where(m => (m.SenderId == currentUserId && m.ReceiverId == user.Id && !m.IsDeletedBySender) ||
+                               (m.SenderId == user.Id && m.ReceiverId == currentUserId && !m.IsDeletedByReceiver))
+                    .OrderByDescending(m => m.SentAt)
+                    .FirstOrDefaultAsync();
+
+                if (lastMsg != null)
+                {
+                    user.LastMessage = lastMsg.Message;
+                    user.LastMessageTime = lastMsg.SentAt;
+                }
+
+                user.UnreadCount = await _context.ChatMessages
+                    .CountAsync(m => m.SenderId == user.Id && m.ReceiverId == currentUserId && !m.IsRead && !m.IsDeletedByReceiver);
+            }
+
+            return users;
         }
 
         [HttpPost]
@@ -457,16 +928,19 @@ namespace ERP.Controllers
         [HttpGet]
         public async Task<IActionResult> GetUserInfo(string userId)
         {
-            if (string.IsNullOrEmpty(userId)) return BadRequest();
+            if (string.IsNullOrEmpty(userId)) 
+                return Json(new { success = false, error = "شناسه کاربر خالی است" });
             
             var user = await _context.Users.FindAsync(userId);
-            if (user == null) return NotFound();
+            if (user == null) 
+                return Json(new { success = false, error = "کاربر یافت نشد" });
             
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var hasAccess = await _context.ChatAccesses
                 .AnyAsync(c => c.UserId == currentUserId && c.AllowedUserId == userId && !c.IsBlocked);
             
             return Json(new {
+                success = true,
                 id = user.Id,
                 name = user.FirstName + " " + user.LastName,
                 image = string.IsNullOrEmpty(user.Image) ? "/UserImage/Male.png" : "/UserImage/" + user.Image,
@@ -476,8 +950,35 @@ namespace ERP.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetAllUsers()
         {
+            var guestToken = Request.Cookies["GuestToken"];
+            if (!string.IsNullOrEmpty(guestToken))
+            {
+                var guest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+
+                if (guest != null && guest.GroupId.HasValue)
+                {
+                    var userIdsInGroup = await _context.UserGroups
+                        .Where(ug => ug.GroupID == guest.GroupId.Value)
+                        .Select(ug => ug.UserID)
+                        .ToListAsync();
+
+                    var users = await _context.Users
+                        .Where(u => userIdsInGroup.Contains(u.Id))
+                        .Select(u => new {
+                            id = u.Id,
+                            name = u.FirstName + " " + u.LastName,
+                            image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image
+                        })
+                        .ToListAsync();
+
+                    return Json(users);
+                }
+            }
+
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             
             var blockedUsers = await _context.ChatAccesses
@@ -485,7 +986,7 @@ namespace ERP.Controllers
                 .Select(c => c.AllowedUserId)
                 .ToListAsync();
             
-            var users = await _context.Users
+            var allUsers = await _context.Users
                 .Where(u => u.Id != currentUserId && blockedUsers.Contains(u.Id))
                 .Select(u => new {
                     id = u.Id,
@@ -494,15 +995,38 @@ namespace ERP.Controllers
                 })
                 .ToListAsync();
             
-            return Json(users);
+            return Json(allUsers);
         }
 
         [HttpGet]
+        [Authorize]
         public async Task<IActionResult> GetChatUsers()
         {
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var users = await GetChatUsersInternal(currentUserId);
-            return Json(users);
+            return Json(users.OrderByDescending(u => u.LastMessageTime));
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "SuperAdmin,Admin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AddGuestChatAccess(int guestId, string allowedUserId)
+        {
+            var existing = await _context.GuestChatAccesses
+                .FirstOrDefaultAsync(a => a.GuestUserId == guestId && a.AllowedUserId == allowedUserId);
+
+            if (existing == null)
+            {
+                _context.GuestChatAccesses.Add(new GuestChatAccess
+                {
+                    GuestUserId = guestId,
+                    AllowedUserId = allowedUserId,
+                    GrantedDate = DateTime.Now
+                });
+                await _context.SaveChangesAsync();
+            }
+
+            return Json(new { success = true });
         }
 
         [HttpPost]
@@ -592,15 +1116,20 @@ namespace ERP.Controllers
             .ToList();
         }
 
-        private async Task<List<ChatUser>> GetChatUsersInternal(string currentUserId)
-        {
-            return await GetChatUsers(currentUserId);
-        }
 
         public IActionResult AccessControl(string userId = null)
         {
             ViewBag.UserId = userId;
             return View();
+        }
+
+        [HttpPost]
+        [AllowAnonymous]
+        [ValidateAntiForgeryToken]
+        public IActionResult GuestLogout()
+        {
+            Response.Cookies.Delete("GuestToken");
+            return Json(new { success = true });
         }
 
         [HttpPost]
@@ -769,11 +1298,13 @@ namespace ERP.Controllers
             return Json(users);
         }
         [HttpGet]
+        [Authorize]
         public async Task<IActionResult> GetUnreadCount()
         {
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var count = await _context.ChatMessages
                 .CountAsync(m => m.ReceiverId == currentUserId && !m.IsRead && !m.IsDeletedByReceiver);
+            
             return Json(new { unreadCount = count });
         }
     }

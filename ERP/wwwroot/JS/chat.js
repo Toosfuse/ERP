@@ -11,20 +11,8 @@ let isLoadingMessages = false;
 window.currentGroupId = null;
 
 $(document).ready(function() {
-    if ('Notification' in window) {
-        if (Notification.permission === 'granted') {
-            console.log('Notification فعال است');
-        } else if (Notification.permission !== 'denied') {
-            Notification.requestPermission().then(function(permission) {
-                console.log('Notification اجازه:', permission);
-            });
-        }
-    }
-    
     connection = new signalR.HubConnectionBuilder()
-        .withUrl("/chatHub", {
-            transport: signalR.HttpTransportType.LongPolling
-        })
+        .withUrl("/chatHub")
         .withAutomaticReconnect()
         .build();
 
@@ -72,22 +60,24 @@ $(document).ready(function() {
         
         const userItem = $(`.user-item[data-user-id="${otherUserId}"]`);
         
-        if (userItem.length === 0 && msg.receiverId === myUserId) {
+        if (userItem.length === 0 && msg.receiverId === myUserId && otherUserId) {
             $.get('/Chat/GetUserInfo', { userId: otherUserId }, function(user) {
-                const newUserHtml = `
-                    <div class="user-item" data-user-id="${user.id}" data-user-name="${user.name}">
-                        <div class="user-avatar">
-                            <img src="${user.image}" alt="${user.name}" />
-                            <span class="online-status ${user.isOnline ? 'online' : ''}"></span>
+                if (user.success) {
+                    const newUserHtml = `
+                        <div class="user-item" data-user-id="${user.id}" data-user-name="${user.name}">
+                            <div class="user-avatar">
+                                <img src="${user.image}" alt="${user.name}" />
+                                <span class="online-status ${user.isOnline ? 'online' : ''}"></span>
+                            </div>
+                            <div class="user-info">
+                                <div class="user-name">${user.name}</div>
+                                <div class="last-message">${msg.message}</div>
+                            </div>
+                            <div class="unread-count">1</div>
                         </div>
-                        <div class="user-info">
-                            <div class="user-name">${user.name}</div>
-                            <div class="last-message">${msg.message}</div>
-                        </div>
-                        <div class="unread-count">1</div>
-                    </div>
-                `;
-                $('.users-list').prepend(newUserHtml);
+                    `;
+                    $('.users-list').prepend(newUserHtml);
+                }
             });
         } else if (userItem.length > 0) {
             userItem.prependTo('.users-list');
@@ -313,9 +303,20 @@ $(document).ready(function() {
     });
 
     $('#logoutBtn').click(function() {
-        if (confirm('آیا میخواهید خارج شوید؟')) {
-            window.location.href = '/Account/Login';
-        }
+        $.get('/Chat/GetCurrentUserName', function(data) {
+            const message = data.isGuest ? 'آیا میخواهید از چت خارج شوید؟' : `آیا میخواهید خارج شوید ${data.name}؟`;
+            if (confirm(message)) {
+                if (data.isGuest) {
+                    $.post('/Chat/GuestLogout', function(result) {
+                        if (result.success) {
+                            window.location.href = '/Chat/GuestLogin';
+                        }
+                    });
+                } else {
+                    window.location.href = '/Account/Login';
+                }
+            }
+        });
     });
 
     $('#newChatBtn').click(function() {
@@ -478,18 +479,10 @@ function selectUser(element) {
     
     element.find('.unread-count').remove();
     
-    $.get('/Chat/GetUserInfo', { userId: userId }, function(data) {
-        const hasAccess = data.hasAccess;
-        if (!hasAccess) {
-            $('#messageInput').prop('disabled', true).attr('placeholder', 'شما مجاز به ارسال پیام نیستید');
-            $('#sendBtn').prop('disabled', true);
-            $('#attachBtn').prop('disabled', true);
-        } else {
-            $('#messageInput').prop('disabled', false).attr('placeholder', 'پیام خود را بنویسید...');
-            $('#sendBtn').prop('disabled', false);
-            $('#attachBtn').prop('disabled', false);
-        }
-    });
+    // Enable input for all users (guest and company)
+    $('#messageInput').prop('disabled', false).attr('placeholder', 'پیام خود را بنویسید...');
+    $('#sendBtn').prop('disabled', false);
+    $('#attachBtn').prop('disabled', false);
     
     loadMessages(currentUserId);
     markAsRead(currentUserId);
@@ -877,7 +870,7 @@ function escapeHtml(text) {
 }
 
 function showForwardModal(messageId) {
-    $.get('/Chat/GetChatUsers', function(users) {
+    $.get('/Chat/GetForwardUsers', function(users) {
         let usersHtml = '';
         users.forEach(function(user) {
             usersHtml += `

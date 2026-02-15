@@ -4,6 +4,7 @@ using ERP.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ERP.Migrations
 {
     [DbContext(typeof(ERPContext))]
-    partial class ERPContextModelSnapshot : ModelSnapshot
+    [Migration("20260214130207_updatechatmessage")]
+    partial class updatechatmessage
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -238,7 +241,7 @@ namespace ERP.Migrations
 
                     b.Property<string>("ReceiverId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("ReplyToMessage")
                         .HasColumnType("nvarchar(max)");
@@ -251,12 +254,16 @@ namespace ERP.Migrations
 
                     b.Property<string>("SenderId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<DateTime>("SentAt")
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ReceiverId");
+
+                    b.HasIndex("SenderId");
 
                     b.ToTable("ChatMessages");
                 });
@@ -1120,6 +1127,64 @@ namespace ERP.Migrations
                     b.ToTable("GuestChatAccesses");
                 });
 
+            modelBuilder.Entity("ERP.Models.GuestChatMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AttachmentName")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("AttachmentPath")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("GuestReceiverId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("GuestSenderId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDelivered")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UserReceiverId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("UserSenderId")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GuestReceiverId");
+
+                    b.HasIndex("GuestSenderId");
+
+                    b.HasIndex("UserReceiverId");
+
+                    b.HasIndex("UserSenderId");
+
+                    b.ToTable("GuestChatMessages");
+                });
+
             modelBuilder.Entity("ERP.Models.GuestEntry", b =>
                 {
                     b.Property<int>("GuestEntryID")
@@ -1268,27 +1333,17 @@ namespace ERP.Migrations
                     b.Property<DateTime>("ExpiryDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<string>("FirstName")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<string>("FullName")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int?>("GroupId")
                         .HasColumnType("int");
 
-                    b.Property<string>("Image")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<DateTime?>("LastActivity")
                         .HasColumnType("datetime2");
-
-                    b.Property<string>("LastName")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
@@ -2621,6 +2676,25 @@ namespace ERP.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("ERP.Models.ChatMessage", b =>
+                {
+                    b.HasOne("ERP.Models.Users", "Receiver")
+                        .WithMany()
+                        .HasForeignKey("ReceiverId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ERP.Models.Users", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Receiver");
+
+                    b.Navigation("Sender");
+                });
+
             modelBuilder.Entity("ERP.Models.GoodsConsignedItemGuard", b =>
                 {
                     b.HasOne("ERP.Models.GoodsConsigned", "GoodsConsigned")
@@ -2671,6 +2745,37 @@ namespace ERP.Migrations
                     b.Navigation("AllowedUser");
 
                     b.Navigation("GuestUser");
+                });
+
+            modelBuilder.Entity("ERP.Models.GuestChatMessage", b =>
+                {
+                    b.HasOne("ERP.Models.GuestUser", "GuestReceiver")
+                        .WithMany()
+                        .HasForeignKey("GuestReceiverId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ERP.Models.GuestUser", "GuestSender")
+                        .WithMany()
+                        .HasForeignKey("GuestSenderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ERP.Models.Users", "UserReceiver")
+                        .WithMany()
+                        .HasForeignKey("UserReceiverId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ERP.Models.Users", "UserSender")
+                        .WithMany()
+                        .HasForeignKey("UserSenderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("GuestReceiver");
+
+                    b.Navigation("GuestSender");
+
+                    b.Navigation("UserReceiver");
+
+                    b.Navigation("UserSender");
                 });
 
             modelBuilder.Entity("ERP.Models.Meeting", b =>
