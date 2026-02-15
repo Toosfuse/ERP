@@ -308,20 +308,19 @@ $(document).ready(function() {
     });
 
     $('#logoutBtn').click(function() {
-        $.get('/Chat/GetCurrentUserName', function(data) {
-            const message = data.isGuest ? 'آیا میخواهید از چت خارج شوید؟' : `آیا میخواهید خارج شوید ${data.name}؟`;
-            if (confirm(message)) {
+        const guestToken = document.cookie.split('; ').find(row => row.startsWith('GuestToken='));
+        
+        if (guestToken) {
+            window.location.href = '/Chat/Index';
+        } else {
+            $.get('/Chat/GetCurrentUserName', function(data) {
                 if (data.isGuest) {
-                    $.post('/Chat/GuestLogout', function(result) {
-                        if (result.success) {
-                            window.location.href = '/Chat/GuestLogin';
-                        }
-                    });
+                    window.location.href = '/Chat/GuestLogin';
                 } else {
-                    window.location.href = '/Account/Login';
+                    window.location.href = '/Home/Index';
                 }
-            }
-        });
+            });
+        }
     });
 
     $('#newChatBtn').click(function() {
@@ -863,6 +862,7 @@ function deleteChat() {
             $('#chatHeader').hide();
             $('#chatInput').hide();
             $('#restoreChatBtn').show();
+            window.location.reload();
             alert('چت پاک شد. میتوانید بازیابی کنید.');
         }
     }).fail(function() {
@@ -942,10 +942,11 @@ function forwardMessage(messageId, userId) {
 
 function showNotification(msg) {
     if (window.notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
-        const senderName = currentUserName || 'کاربر';
+        const senderName = msg.senderName || 'کاربر';
+        const senderImage = msg.senderImage || '/UserImage/Male.png';
         const notification = new Notification('پیام جدید از ' + senderName, {
             body: msg.message.substring(0, 100),
-            icon: '/UserImage/Male.png',
+            icon: senderImage,
             tag: 'chat-' + msg.senderId,
             requireInteraction: false
         });

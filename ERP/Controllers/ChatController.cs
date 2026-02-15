@@ -432,7 +432,7 @@ namespace ERP.Controllers
                             senderName = (guest.FirstName ?? "") + " " + (guest.LastName ?? ""),
                             senderImage = "/UserImage/" + guest.Image,
                             receiverName = receiverUser?.FirstName + " " + receiverUser?.LastName,
-                            receiverImage = receiverUser?.Image ?? "/UserImage/Male.png"
+                            receiverImage = string.IsNullOrEmpty(receiverUser?.Image) ? "/UserImage/Male.png" : "/UserImage/" + receiverUser.Image
                         };
 
                         await _hubContext.Clients.All.SendAsync("ReceiveMessage", guestMessageData);
@@ -510,9 +510,9 @@ namespace ERP.Controllers
                     replyToMessage = replyToMessage,
                     replyToSenderName = replyToSenderName,
                     senderName = senderUser?.FirstName + " " + senderUser?.LastName,
-                    senderImage = senderUser?.Image ?? "/UserImage/Male.png",
+                    senderImage = string.IsNullOrEmpty(senderUser?.Image) ? "/UserImage/Male.png" : "/UserImage/" + senderUser.Image,
                     receiverName = receiverUser2?.FirstName + " " + receiverUser2?.LastName,
-                    receiverImage = receiverUser2?.Image ?? "/UserImage/Male.png"
+                    receiverImage = string.IsNullOrEmpty(receiverUser2?.Image) ? "/UserImage/Male.png" : "/UserImage/" + receiverUser2.Image
                 };
 
                 await _hubContext.Clients.All.SendAsync("ReceiveMessage", messageData);
