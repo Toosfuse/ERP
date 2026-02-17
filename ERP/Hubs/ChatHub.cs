@@ -231,13 +231,11 @@ namespace ERP.Hubs
             var senderId = GetUserId();
             if (string.IsNullOrEmpty(senderId)) return;
             
-            // بررسی دسترسی
             var hasAccess = await _context.ChatAccesses
                 .AnyAsync(ca => ca.UserId == senderId && ca.AllowedUserId == receiverId && !ca.IsBlocked);
             
             if (!hasAccess) return;
             
-            // ذخیره پیام
             var chatMessage = new ChatMessage
             {
                 SenderId = senderId,
@@ -249,7 +247,7 @@ namespace ERP.Hubs
             _context.ChatMessages.Add(chatMessage);
             await _context.SaveChangesAsync();
             
-            // ارسال فقط به گیرنده
+            // ارسال به گیرنده
             await Clients.Group($"User_{receiverId}").SendAsync("ReceiveMessage", new
             {
                 id = chatMessage.Id,
@@ -258,7 +256,10 @@ namespace ERP.Hubs
                 sentAt = chatMessage.SentAt
             });
             
-            // ارسال تایید به فرستنده
+            // آپدیت تعداد نخوانده برای گیرنده
+            var unreadCount = await _context.ChatMessages.CountAsync(m => m.ReceiverId == receiverId && !m.IsRead);
+            await Clients.Group($"User_{receiverId}").SendAsync("UpdateUnreadCount", unreadCount);
+            
             await Clients.Caller.SendAsync("MessageSent", new
             {
                 id = chatMessage.Id,
