@@ -17,61 +17,194 @@
 </head>
 <body>
     <div class="monitoring-container">
-        <div class="monitoring-header">
+        <div class="monitoring-header" style="padding:10px 20px;">
             <div class="header-left">
-                <i class="fa fa-eye header-icon"></i>
+                <i class="fa fa-eye header-icon" style="font-size:24px;"></i>
                 <div>
-                    <h1>مانیتورینگ چت سازمانی</h1>
-                    <p>نظارت بر تمام مکالمات کاربران</p>
+                    <h1 style="font-size:18px;margin:0;">مانیتورینگ چت سازمانی</h1>
+                    <p style="font-size:12px;margin:0;">نظارت بر تمام مکالمات کاربران</p>
                 </div>
             </div>
             <div class="header-actions">
-                <button id="refreshBtn" class="btn-action" title="بروزرسانی">
+                <button id="refreshBtn" class="btn-action" title="بروزرسانی" style="padding:6px 12px;">
                     <i class="fa fa-refresh"></i>
                 </button>
-                <a href="/Home/Cartable" class="btn-back">
+                <a href="/Home/Cartable" class="btn-back" style="padding:6px 12px;">
                     <i class="fa fa-arrow-left"></i>
                     بازگشت
                 </a>
             </div>
         </div>
 
-        <div class="stats-bar ">
-            <div class="stat-card">
-                <i class="fa fa-comments"></i>
+        <div class="stats-bar" style="padding:10px 20px;gap:10px;">
+            <div class="stat-card" style="padding:12px;">
+                <i class="fa fa-comments" style="font-size:24px;"></i>
                 <div>
-                    <span class="stat-value" id="totalMessages">0</span>
-                    <span class="stat-label">کل پیامها</span>
+                    <span class="stat-value" id="totalMessages" style="font-size:20px;">0</span>
+                    <span class="stat-label" style="font-size:11px;">کل پیامها</span>
                 </div>
             </div>
-            <div class="stat-card">
-                <i class="fa fa-user"></i>
+            <div class="stat-card" style="padding:12px;">
+                <i class="fa fa-user" style="font-size:24px;"></i>
                 <div>
-                    <span class="stat-value" id="activeConversations">0</span>
-                    <span class="stat-label">مکالمات فعال</span>
+                    <span class="stat-value" id="activeConversations" style="font-size:20px;">0</span>
+                    <span class="stat-label" style="font-size:11px;">مکالمات فعال</span>
+                </div>
+            </div>
+            <div class="stat-card" style="padding:12px;">
+                <i class="fa fa-users" style="font-size:24px;"></i>
+                <div>
+                    <span class="stat-value" id="totalGroups" style="font-size:20px;">0</span>
+                    <span class="stat-label" style="font-size:11px;">تعداد گروهها</span>
+                </div>
+            </div>
+            <div class="stat-card" style="padding:12px;">
+                <i class="fa fa-clock" style="font-size:24px;"></i>
+                <div>
+                    <span class="stat-value" id="messagesLast24h" style="font-size:20px;">0</span>
+                    <span class="stat-label" style="font-size:11px;">24 ساعت گذشته</span>
+                </div>
+            </div>
+            <div class="stat-card" style="padding:12px;">
+                <i class="fa fa-user" style="font-size:24px;"></i>
+                <div>
+                    <span class="stat-value" id="totalUsers" style="font-size:20px;">0</span>
+                    <span class="stat-label" style="font-size:11px;">کل کاربران</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="advanced-stats" style="margin:10px 20px;">
+            <button id="showAdvancedStatsBtn" class="btn-action" style="width:100%;padding:8px;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;margin-bottom:8px;">
+                <i class="fa fa-chart-bar"></i> نمایش گزارشات پیشرفته
+            </button>
+            <button id="showUsersManagementBtn" class="btn-action" style="width:100%;padding:8px;background:linear-gradient(135deg, #10b981 0%, #059669 100%);color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;margin-bottom:8px;">
+                <i class="fa fa-users"></i> مدیریت کاربران
+            </button>
+            <button id="showDashboardBtn" class="btn-action" style="width:100%;padding:8px;background:linear-gradient(135deg, #f59e0b 0%, #d97706 100%);color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;">
+                <i class="fa fa-dashboard"></i> داشبورد تحلیلی
+            </button>
+        </div>
+
+        <div id="advancedStatsPanel" style="display:none;margin:20px 0;">
+            <div class="stats-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px;margin-bottom:20px;">
+                <div class="stat-card-advanced" style="background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:flex;align-items:center;gap:15px;">
+                    <i class="fa fa-check-circle" style="color:#10b981;font-size:32px;"></i>
+                    <div>
+                        <span class="stat-value" id="readRate" style="display:block;font-size:24px;font-weight:700;color:#2d3748;">0%</span>
+                        <span class="stat-label" style="display:block;font-size:13px;color:#718096;margin-top:4px;">نرخ خوانده شدن</span>
+                    </div>
+                </div>
+                <div class="stat-card-advanced" style="background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:flex;align-items:center;gap:15px;">
+                    <i class="fa fa-clock" style="color:#f59e0b;font-size:32px;"></i>
+                    <div>
+                        <span class="stat-value" id="avgResponseTime" style="display:block;font-size:24px;font-weight:700;color:#2d3748;">0</span>
+                        <span class="stat-label" style="display:block;font-size:13px;color:#718096;margin-top:4px;">میانگین پاسخ (دقیقه)</span>
+                    </div>
+                </div>
+                <div class="stat-card-advanced" style="background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:flex;align-items:center;gap:15px;">
+                    <i class="fa fa-paperclip" style="color:#3b82f6;font-size:32px;"></i>
+                    <div>
+                        <span class="stat-value" id="totalAttachments" style="display:block;font-size:24px;font-weight:700;color:#2d3748;">0</span>
+                        <span class="stat-label" style="display:block;font-size:13px;color:#718096;margin-top:4px;">فایلهای پیوست</span>
+                    </div>
+                </div>
+                <div class="stat-card-advanced" style="background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:flex;align-items:center;gap:15px;">
+                    <i class="fa fa-edit" style="color:#8b5cf6;font-size:32px;"></i>
+                    <div>
+                        <span class="stat-value" id="editedMessages" style="display:block;font-size:24px;font-weight:700;color:#2d3748;">0</span>
+                        <span class="stat-label" style="display:block;font-size:13px;color:#718096;margin-top:4px;">پیامهای ویرایش شده</span>
+                    </div>
                 </div>
             </div>
 
-            <div class="stat-card">
-                <i class="fa fa-users"></i>
-                <div>
-                    <span class="stat-value" id="totalGroups">0</span>
-                    <span class="stat-label">تعداد گروهها</span>
+            <div class="charts-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:20px;">
+                <div class="chart-card" style="background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                    <h4 style="margin:0 0 15px 0;color:#2d3748;font-size:16px;"><i class="fa fa-chart-line"></i> پیامهای روزانه (7 روز اخیر)</h4>
+                    <div style="height:250px;position:relative;">
+                        <canvas id="dailyChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card" style="background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                    <h4 style="margin:0 0 15px 0;color:#2d3748;font-size:16px;"><i class="fa fa-clock"></i> فعالترین ساعات</h4>
+                    <div style="height:250px;position:relative;">
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <div class="stat-card">
-                <i class="fa fa-clock"></i>
-                <div>
-                    <span class="stat-value" id="messagesLast24h">0</span>
-                    <span class="stat-label">24 ساعت گذشته</span>
+        <div id="usersManagementPanel" style="display:none;margin:20px 0;">
+            <div style="background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                    <h3 style="margin:0;color:#2d3748;"><i class="fa fa-users"></i> لیست کاربران</h3>
+                    <input type="text" id="searchUsersInput" placeholder="جستجو کاربر..." style="padding:8px 15px;border:1px solid #ddd;border-radius:6px;width:250px;" />
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#f7fafc;">
+                                <th style="padding:12px;text-align:right;border-bottom:2px solid #e2e8f0;">کاربر</th>
+                                <th style="padding:12px;text-align:center;border-bottom:2px solid #e2e8f0;">وضعیت</th>
+                                <th style="padding:12px;text-align:center;border-bottom:2px solid #e2e8f0;">آخرین فعالیت</th>
+                                <th style="padding:12px;text-align:center;border-bottom:2px solid #e2e8f0;">پیام ارسالی</th>
+                                <th style="padding:12px;text-align:center;border-bottom:2px solid #e2e8f0;">پیام دریافتی</th>
+                                <th style="padding:12px;text-align:center;border-bottom:2px solid #e2e8f0;">جمع پیامها</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align:center;padding:20px;color:#999;">
+                                    <i class="fa fa-spinner fa-spin"></i> در حال بارگذاری...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
-            <div class="stat-card">
-                <i class="fa fa-user"></i>
-                <div>
-                    <span class="stat-value" id="totalUsers">0</span>
-                    <span class="stat-label">کل کاربران</span>
+        </div>
+
+        <div id="dashboardPanel" style="display:none;margin:20px 0;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-bottom:20px;">
+                <div style="background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                    <h4 style="margin:0 0 15px 0;color:#2d3748;font-size:16px;"><i class="fa fa-pie-chart"></i> نسبت پیامها</h4>
+                    <div style="height:250px;position:relative;">
+                        <canvas id="readUnreadChart"></canvas>
+                    </div>
+                </div>
+                <div style="background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                    <h4 style="margin:0 0 15px 0;color:#2d3748;font-size:16px;"><i class="fa fa-bar-chart"></i> فعالترین کاربران</h4>
+                    <div style="height:250px;position:relative;">
+                        <canvas id="topUsersChart"></canvas>
+                    </div>
+                </div>
+                <div style="background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                    <h4 style="margin:0 0 15px 0;color:#2d3748;font-size:16px;"><i class="fa fa-line-chart"></i> روند رشد</h4>
+                    <div style="height:250px;position:relative;">
+                        <canvas id="growthChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:15px;">
+                <div style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);padding:20px;border-radius:12px;color:white;">
+                    <i class="fa fa-users" style="font-size:32px;opacity:0.8;"></i>
+                    <h3 id="onlineUsersCount" style="margin:10px 0 5px 0;font-size:32px;font-weight:700;">0</h3>
+                    <p style="margin:0;opacity:0.9;">کاربران آنلاین</p>
+                </div>
+                <div style="background:linear-gradient(135deg, #10b981 0%, #059669 100%);padding:20px;border-radius:12px;color:white;">
+                    <i class="fa fa-check-circle" style="font-size:32px;opacity:0.8;"></i>
+                    <h3 id="todayMessages" style="margin:10px 0 5px 0;font-size:32px;font-weight:700;">0</h3>
+                    <p style="margin:0;opacity:0.9;">پیامهای امروز</p>
+                </div>
+                <div style="background:linear-gradient(135deg, #f59e0b 0%, #d97706 100%);padding:20px;border-radius:12px;color:white;">
+                    <i class="fa fa-comments" style="font-size:32px;opacity:0.8;"></i>
+                    <h3 id="activeChatsCount" style="margin:10px 0 5px 0;font-size:32px;font-weight:700;">0</h3>
+                    <p style="margin:0;opacity:0.9;">چتهای فعال</p>
+                </div>
+                <div style="background:linear-gradient(135deg, #ef4444 0%, #dc2626 100%);padding:20px;border-radius:12px;color:white;">
+                    <i class="fa fa-envelope" style="font-size:32px;opacity:0.8;"></i>
+                    <h3 id="unreadMessagesCount" style="margin:10px 0 5px 0;font-size:32px;font-weight:700;">0</h3>
+                    <p style="margin:0;opacity:0.9;">پیامهای خوانده نشده</p>
                 </div>
             </div>
         </div>
@@ -177,9 +310,233 @@
     <script src="~/JS/jquery-3.6.0.min.js"></script>
     <script src="~/SignalR/signalr.min.js"></script>
     <script src="~/jalalidatepicker/jalalidatepicker.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="~/JS/chat-monitoring.js"></script>
     <script>
         jalaliDatepicker.startWatch();
+
+        $('#showAdvancedStatsBtn').click(function() {
+            const panel = $('#advancedStatsPanel');
+            if (panel.is(':visible')) {
+                panel.slideUp();
+                $(this).html('<i class="fa fa-chart-bar"></i> نمایش گزارشات پیشرفته');
+            } else {
+                $('#usersManagementPanel').slideUp();
+                $('#dashboardPanel').slideUp();
+                panel.slideDown();
+                $(this).html('<i class="fa fa-chart-bar"></i> مخفی کردن گزارشات');
+                loadAdvancedStats();
+            }
+        });
+
+        $('#showUsersManagementBtn').click(function() {
+            const panel = $('#usersManagementPanel');
+            if (panel.is(':visible')) {
+                panel.slideUp();
+                $(this).html('<i class="fa fa-users"></i> مدیریت کاربران');
+            } else {
+                $('#advancedStatsPanel').slideUp();
+                $('#dashboardPanel').slideUp();
+                panel.slideDown();
+                $(this).html('<i class="fa fa-users"></i> مخفی کردن');
+                loadUsersManagement();
+            }
+        });
+
+        $('#showDashboardBtn').click(function() {
+            const panel = $('#dashboardPanel');
+            if (panel.is(':visible')) {
+                panel.slideUp();
+                $(this).html('<i class="fa fa-dashboard"></i> داشبورد تحلیلی');
+            } else {
+                $('#advancedStatsPanel').slideUp();
+                $('#usersManagementPanel').slideUp();
+                panel.slideDown();
+                $(this).html('<i class="fa fa-dashboard"></i> مخفی کردن');
+                loadDashboard();
+            }
+        });
+
+        $('#searchUsersInput').on('input', function() {
+            const query = $(this).val().toLowerCase();
+            $('#usersTableBody tr').each(function() {
+                const text = $(this).text().toLowerCase();
+                $(this).toggle(text.includes(query));
+            });
+        });
+
+        let dailyChart, hourlyChart;
+
+        function loadAdvancedStats() {
+            $.get('/ChatMonitoring/GetAdvancedStatistics', function(data) {
+                $('#readRate').text(data.readRate + '%');
+                $('#avgResponseTime').text(data.avgResponseTime);
+                $('#totalAttachments').text(data.totalAttachments);
+                $('#editedMessages').text(data.editedMessages);
+
+                // نمودار روزانه
+                const dailyLabels = data.dailyMessages.map(d => new Date(d.date).toLocaleDateString('fa-IR'));
+                const dailyData = data.dailyMessages.map(d => d.count);
+
+                if (dailyChart) dailyChart.destroy();
+                dailyChart = new Chart(document.getElementById('dailyChart'), {
+                    type: 'line',
+                    data: {
+                        labels: dailyLabels,
+                        datasets: [{
+                            label: 'تعداد پیام',
+                            data: dailyData,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } }
+                    }
+                });
+
+                // نمودار ساعتی
+                const hourlyLabels = data.hourlyActivity.map(h => h.hour + ':00');
+                const hourlyData = data.hourlyActivity.map(h => h.count);
+
+                if (hourlyChart) hourlyChart.destroy();
+                hourlyChart = new Chart(document.getElementById('hourlyChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: hourlyLabels,
+                        datasets: [{
+                            label: 'تعداد پیام',
+                            data: hourlyData,
+                            backgroundColor: '#764ba2'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            });
+        }
+
+        function loadUsersManagement() {
+            $.get('/ChatMonitoring/GetUsersManagement', function(users) {
+                let html = '';
+                users.forEach(function(user) {
+                    const statusBadge = user.isOnline 
+                        ? '<span style="background:#10b981;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;">آنلاین</span>'
+                        : '<span style="background:#6b7280;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;">آفلاین</span>';
+                    
+                    const lastSeen = user.lastSeen ? new Date(user.lastSeen).toLocaleString('fa-IR') : 'هرگز';
+                    
+                    html += `
+                        <tr style="border-bottom:1px solid #e2e8f0;transition:all 0.3s;" onmouseover="this.style.background='#f7fafc'" onmouseout="this.style.background='white'">
+                            <td style="padding:12px;">
+                                <div style="display:flex;align-items:center;gap:12px;">
+                                    <img src="${user.image}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid #667eea;" />
+                                    <span style="font-weight:600;color:#2d3748;">${user.name}</span>
+                                </div>
+                            </td>
+                            <td style="padding:12px;text-align:center;">${statusBadge}</td>
+                            <td style="padding:12px;text-align:center;color:#718096;font-size:13px;">${lastSeen}</td>
+                            <td style="padding:12px;text-align:center;font-weight:600;color:#667eea;">${user.sentCount}</td>
+                            <td style="padding:12px;text-align:center;font-weight:600;color:#f59e0b;">${user.receivedCount}</td>
+                            <td style="padding:12px;text-align:center;font-weight:700;color:#10b981;">${user.totalMessages}</td>
+                        </tr>
+                    `;
+                });
+                $('#usersTableBody').html(html || '<tr><td colspan="6" style="text-align:center;padding:20px;color:#999;">کاربری یافت نشد</td></tr>');
+            });
+        }
+
+        let readUnreadChart, topUsersChart, growthChart;
+
+        function loadDashboard() {
+            $.get('/ChatMonitoring/GetStatistics', function(stats) {
+                $('#onlineUsersCount').text(stats.totalUsers);
+                $('#activeChatsCount').text(stats.activeConversations);
+                
+                const unreadCount = stats.totalMessages - Math.round(stats.totalMessages * 0.7);
+                $('#unreadMessagesCount').text(unreadCount);
+            });
+
+            $.get('/ChatMonitoring/GetAdvancedStatistics', function(data) {
+                $('#todayMessages').text(data.dailyMessages[data.dailyMessages.length - 1]?.count || 0);
+
+                // نمودار دایرهای
+                const readCount = Math.round(data.readRate);
+                const unreadCount = 100 - readCount;
+
+                if (readUnreadChart) readUnreadChart.destroy();
+                readUnreadChart = new Chart(document.getElementById('readUnreadChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['خوانده شده', 'خوانده نشده'],
+                        datasets: [{
+                            data: [readCount, unreadCount],
+                            backgroundColor: ['#10b981', '#ef4444']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+
+                // نمودار میلهای فعالترین کاربران
+                $.get('/ChatMonitoring/GetStatistics', function(stats) {
+                    const topLabels = stats.topUsers.map(u => u.name);
+                    const topData = stats.topUsers.map(u => u.count);
+
+                    if (topUsersChart) topUsersChart.destroy();
+                    topUsersChart = new Chart(document.getElementById('topUsersChart'), {
+                        type: 'bar',
+                        data: {
+                            labels: topLabels,
+                            datasets: [{
+                                label: 'تعداد پیام',
+                                data: topData,
+                                backgroundColor: '#667eea'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                });
+
+                // نمودار خطی روند
+                const growthLabels = data.monthlyMessages.map(m => m.month + '/' + m.year);
+                const growthData = data.monthlyMessages.map(m => m.count);
+
+                if (growthChart) growthChart.destroy();
+                growthChart = new Chart(document.getElementById('growthChart'), {
+                    type: 'line',
+                    data: {
+                        labels: growthLabels,
+                        datasets: [{
+                            label: 'تعداد پیام',
+                            data: growthData,
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } }
+                    }
+                });
+            });
+        }
     </script>
     }
     <style>

@@ -28,6 +28,12 @@ namespace ERP.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateGroup(string name, List<string> memberIds)
         {
+            if (string.IsNullOrWhiteSpace(name))
+                return Json(new { success = false, error = "نام گروه خالی است" });
+
+            if (await _context.ChatGroups.AnyAsync(g => g.Name.ToLower() == name.ToLower()))
+                return Json(new { success = false, error = "این نام گروه قبلاً ثبت شده است" });
+
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             
             var group = new ChatGroup

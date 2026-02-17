@@ -429,8 +429,27 @@ namespace ERP.Controllers
                 .Take(5)
                 .ToListAsync();
 
+            var topGroupUsers = await _context.GroupMessages
+                .GroupBy(m => m.SenderId)
+                .Select(g => new {
+                    userId = g.Key,
+                    count = g.Count()
+                })
+                .ToListAsync();
+
+            var combinedUsers = topUsers
+                .Concat(topGroupUsers)
+                .GroupBy(u => u.userId)
+                .Select(g => new {
+                    userId = g.Key,
+                    count = g.Sum(x => x.count)
+                })
+                .OrderByDescending(x => x.count)
+                .Take(5)
+                .ToList();
+
             var topUsersData = new List<object>();
-            foreach (var user in topUsers)
+            foreach (var user in combinedUsers)
             {
                 if (user.userId.Contains("-"))
                 {
@@ -464,6 +483,139 @@ namespace ERP.Controllers
                 messagesLast24h,
                 topUsers = topUsersData
             });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAdvancedStatistics()
+        {
+            var now = DateTime.Now;
+            var last7Days = now.AddDays(-7);
+            var last30Days = now.AddDays(-30);
+
+            // نمودار پیامهای روزانه (7 روز اخیر)
+            var dailyMessages = await _context.ChatMessages
+                .Where(m => m.SentAt >= last7Days)
+                .GroupBy(m => m.SentAt.Date)
+                .Select(g => new {
+                    date = g.Key,
+                    count = g.Count()
+                })
+                .OrderBy(x => x.date)
+                .ToListAsync();
+
+            // فعالترین ساعات
+            var hourlyActivity = await _context.ChatMessages
+                .Where(m => m.SentAt >= last7Days)
+                .GroupBy(m => m.SentAt.Hour)
+                .Select(g => new {
+                    hour = g.Key,
+                    count = g.Count()
+                })
+                .OrderBy(x => x.hour)
+                .ToListAsync();
+
+            // نرخ خوانده شدن پیامها
+            var totalSent = await _context.ChatMessages.CountAsync();
+            var totalRead = await _context.ChatMessages.CountAsync(m => m.IsRead);
+            var readRate = totalSent > 0 ? (double)totalRead / totalSent * 100 : 0;
+
+            // میانگین زمان پاسخدهی (به دقیقه)
+            var conversations = await _context.ChatMessages
+                .Where(m => m.SentAt >= last7Days && m.ReadAt.HasValue && m.ReadAt > m.SentAt)
+                .Select(m => new {
+                    sentAt = m.SentAt,
+                    readAt = m.ReadAt.Value
+                })
+                .ToListAsync();
+
+            var avgResponseTime = conversations.Any() 
+                ? conversations.Average(c => (c.readAt - c.sentAt).TotalMinutes) 
+                : 0;
+
+            // آمار فایلهای پیوست
+            var totalAttachments = await _context.ChatMessages
+                .CountAsync(m => !string.IsNullOrEmpty(m.AttachmentPath));
+
+            var attachmentsByType = _context.ChatMessages
+                .Where(m => !string.IsNullOrEmpty(m.AttachmentName) && m.AttachmentName.Contains("."))
+                .AsEnumerable()
+                .GroupBy(m => m.AttachmentName.Substring(m.AttachmentName.LastIndexOf('.')))
+                .Select(g => new {
+                    type = g.Key,
+                    count = g.Count()
+                })
+                .ToList();
+
+            // پیامهای ویرایش شده و حذف شده
+            var editedMessages = await _context.ChatMessages.CountAsync(m => m.IsEdited);
+            var deletedMessages = await _context.ChatMessages.CountAsync(m => m.IsDeletedBySender || m.IsDeletedByReceiver);
+
+            // آمار گروهی
+            var groupMessages = await _context.GroupMessages.CountAsync();
+            var activeGroups = await _context.ChatGroups
+                .Where(g => g.Messages.Any(m => m.SentAt >= last7Days))
+                .CountAsync();
+
+            // پیامهای ماهانه
+            var monthlyMessages = await _context.ChatMessages
+                .Where(m => m.SentAt >= last30Days)
+                .GroupBy(m => new { m.SentAt.Year, m.SentAt.Month })
+                .Select(g => new {
+                    year = g.Key.Year,
+                    month = g.Key.Month,
+                    count = g.Count()
+                })
+                .OrderBy(x => x.year).ThenBy(x => x.month)
+                .ToListAsync();
+
+            return Json(new {
+                dailyMessages,
+                hourlyActivity,
+                readRate = Math.Round(readRate, 2),
+                avgResponseTime = Math.Round(avgResponseTime, 2),
+                totalAttachments,
+                attachmentsByType,
+                editedMessages,
+                deletedMessages,
+                groupMessages,
+                activeGroups,
+                monthlyMessages
+            });
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetUsersManagement()
+        {
+            var users = await _context.Users
+                .Select(u => new {
+                    id = u.Id,
+                    firstName = u.FirstName ?? "",
+                    lastName = u.LastName ?? "",
+                    image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image,
+                    isOnline = u.IsOnline,
+                    lastSeen = u.LastSeen
+                })
+                .ToListAsync();
+
+            var usersWithStats = new List<object>();
+            foreach (var user in users)
+            {
+                var sentCount = await _context.ChatMessages.CountAsync(m => m.SenderId == user.id);
+                var receivedCount = await _context.ChatMessages.CountAsync(m => m.ReceiverId == user.id);
+                
+                usersWithStats.Add(new {
+                    user.id,
+                    name = user.firstName + " " + user.lastName,
+                    user.image,
+                    user.isOnline,
+                    user.lastSeen,
+                    sentCount,
+                    receivedCount,
+                    totalMessages = sentCount + receivedCount
+                });
+            }
+
+            return Json(usersWithStats);
         }
 
         [HttpPost]

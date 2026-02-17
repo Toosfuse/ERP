@@ -374,7 +374,7 @@ body::before {
 .monitoring-content {
     flex: 1;
     display: grid;
-    grid-template-columns: 400px 1fr;
+    grid-template-columns: 520px 1fr;
     gap: 0;
     overflow: hidden;
     padding: 10px 30px 15px;
