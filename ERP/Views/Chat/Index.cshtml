@@ -121,10 +121,9 @@
            @*  <button type="button" id="refreshBtn" class="refresh-btn" onclick="window.location.href='@Url.Action("Index", "Chat")'">
                 <i class="fa fa-refresh"></i> بروزرسانی
             </button> *@
-           @if (User.Identity.IsAuthenticated)
-           {
+           
                <button type="button" id="tabGroups" class="tab-btn">گروهها</button>
-           }
+           
         </div>
         <div class="users-list" id="usersList">
             @if (Model != null && Model.Any())
@@ -386,10 +385,13 @@
     });
 
     $('#newGroupBtn').click(function() {
-        $.get('/Chat/GetAllUsers', function(users) {
+        $.get('/Chat/GetAllUsersAndGuests', function(data) {
             let html = '';
-            users.forEach(function(user) {
-                html += `<div style="display:flex; align-items:center; padding:8px; border-bottom:1px solid #eee;" class="group-member-item" data-user-id="${user.id}" data-user-name="${user.name}"><input type="checkbox" class="group-member-checkbox" data-user-id="${user.id}" style="margin-left:10px;"><img src="${user.image}" alt="${user.name}" style="width:30px; height:30px; border-radius:50%; margin-left:10px;"><span>${user.name}</span></div>`;
+            data.users.forEach(function(user) {
+                html += `<div style="display:flex; align-items:center; padding:8px; border-bottom:1px solid #eee;" class="group-member-item" data-user-id="${user.id}" data-user-name="${user.name}" data-is-guest="${user.isGuest}"><input type="checkbox" class="group-member-checkbox" data-user-id="${user.id}" data-is-guest="${user.isGuest}" style="margin-left:10px;"><img src="${user.image}" alt="${user.name}" style="width:30px; height:30px; border-radius:50%; margin-left:10px;"><span>${user.name}${user.isGuest ? ' (مهمان)' : ''}</span></div>`;
+            });
+            data.guests.forEach(function(guest) {
+                html += `<div style="display:flex; align-items:center; padding:8px; border-bottom:1px solid #eee;" class="group-member-item" data-user-id="${guest.id}" data-user-name="${guest.name}" data-is-guest="true"><input type="checkbox" class="group-member-checkbox" data-user-id="${guest.id}" data-is-guest="true" style="margin-left:10px;"><img src="${guest.image}" alt="${guest.name}" style="width:30px; height:30px; border-radius:50%; margin-left:10px;"><span>${guest.name} (مهمان)</span></div>`;
             });
             $('#groupMembersList').html(html);
             updateSelectedMembersList();
@@ -493,41 +495,56 @@
 
     function loadGroupMembersModal() {
         $.get('/GroupChat/GetGroupMembers', { groupId: window.currentGroupId }, function(members) {
-            $.get('/Chat/GetAllUsers', function(users) {
+            $.get('/GroupChat/GetUserGroups', function(groups) {
+                const group = groups.find(g => g.id === window.currentGroupId);
+                const isAdmin = group && group.createdBy === window.myUserId;
+                
                 window.groupMembers = members;
-                window.allUsers = users;
-                $('#selectedGroupMembersList').parent().show();
-                displayGroupMembers(members, users);
+                
+                if (isAdmin) {
+                    $.get('/Chat/GetAllUsersAndGuests', function(data) {
+                        const allUsersAndGuests = data.users.concat(data.guests);
+                        window.allUsers = allUsersAndGuests;
+                        $('#selectedGroupMembersList').parent().show();
+                        displayGroupMembersForAdmin(members, allUsersAndGuests);
+                    });
+                } else {
+                    displayGroupMembersForUser(members);
+                }
             });
         });
     }
 
-    function displayGroupMembers(members, users) {
+    function displayGroupMembersForAdmin(members, users) {
         let membersHtml = '';
         let nonMembersHtml = '';
         const memberIds = members.map(m => m.userId);
         
         members.forEach(function(member) {
+            const isCurrentUser = member.userId === window.myUserId;
+            const removeBtn = isCurrentUser ? '' : `<button class="remove-member-btn" data-user-id="${member.userId}" style="padding:5px 10px; background:#f44336; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">حذف</button>`;
+            
             membersHtml += `
                 <div class="group-member-item" style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; justify-content:space-between;" data-user-id="${member.userId}">
                     <div style="display:flex; align-items:center; flex:1;">
                         <img src="${member.userImage}" alt="${member.userName}" style="width:35px; height:35px; border-radius:50%; margin-left:10px;">
                         <span style="font-weight:600;">${member.userName}</span>
                     </div>
-                    <button class="leave-group-btn" data-user-id="${member.userId}" style="padding:5px 10px; background:#f44336; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">خروج از گروه</button>
+                    ${removeBtn}
                 </div>
             `;
         });
         
         users.forEach(function(user) {
-            if (!memberIds.includes(user.id)) {
+            const userId = user.id || user.userId;
+            if (!memberIds.includes(userId)) {
                 nonMembersHtml += `
-                    <div class="group-member-item" style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; justify-content:space-between;" data-user-id="${user.id}">
+                    <div class="group-member-item" style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; justify-content:space-between;" data-user-id="${userId}">
                         <div style="display:flex; align-items:center; flex:1;">
                             <img src="${user.image}" alt="${user.name}" style="width:35px; height:35px; border-radius:50%; margin-left:10px;">
-                            <span style="font-weight:600;">${user.name}</span>
+                            <span style="font-weight:600;">${user.name}${user.isGuest ? ' (مهمان)' : ''}</span>
                         </div>
-                        <button class="add-member-btn" data-user-id="${user.id}" style="padding:5px 10px; background:#4caf50; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">اضافه</button>
+                        <button class="add-member-btn" data-user-id="${userId}" style="padding:5px 10px; background:#4caf50; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">اضافه</button>
                     </div>
                 `;
             }
@@ -537,9 +554,33 @@
         
         if (nonMembersHtml) {
             $('#selectedGroupMembersList').html(nonMembersHtml);
+            $('#selectedGroupMembersList').parent().show();
         } else {
-            $('#selectedGroupMembersList').parent().hide();
+            $('#selectedGroupMembersList').html('<div style="color:#999; text-align:center; padding:10px;">همه اضافه شدهاند</div>');
+            $('#selectedGroupMembersList').parent().show();
         }
+    }
+
+    function displayGroupMembersForUser(members) {
+        let membersHtml = '';
+        
+        members.forEach(function(member) {
+            const isCurrentUser = member.userId === window.myUserId;
+            const leaveBtn = isCurrentUser ? `<button class="leave-group-btn" data-user-id="${member.userId}" style="padding:5px 10px; background:#f44336; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">خروج از گروه</button>` : '';
+            
+            membersHtml += `
+                <div class="group-member-item" style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; justify-content:space-between;" data-user-id="${member.userId}">
+                    <div style="display:flex; align-items:center; flex:1;">
+                        <img src="${member.userImage}" alt="${member.userName}" style="width:35px; height:35px; border-radius:50%; margin-left:10px;">
+                        <span style="font-weight:600;">${member.userName}</span>
+                    </div>
+                    ${leaveBtn}
+                </div>
+            `;
+        });
+        
+        $('#groupMembersListModal').html(membersHtml || '<div style="color:#999; text-align:center; padding:10px;">عضوی وجود ندارد</div>');
+        $('#selectedGroupMembersList').parent().hide();
     }
 
     function updateSelectedGroupMembersList() {
@@ -563,6 +604,19 @@
         }
     });
 
+    $(document).on('click', '.remove-member-btn', function() {
+        const userId = $(this).data('user-id');
+        if (confirm('آیا مطمئن هستید؟')) {
+            $.post('/GroupChat/RemoveMember', { groupId: window.currentGroupId, userId: userId }, function(result) {
+                if (result.success) {
+                    loadGroupMembersModal();
+                } else {
+                    alert(result.error || 'خطا در حذف');
+                }
+            });
+        }
+    });
+
     $(document).on('click', '.leave-group-btn', function() {
         const userId = $(this).data('user-id');
         if (confirm('آیا مطمئن هستید؟')) {
@@ -582,12 +636,20 @@
 
     $(document).on('click', '.add-member-btn', function() {
         const userId = $(this).data('user-id');
-        $.post('/GroupChat/AddMember', { groupId: window.currentGroupId, userId: userId }, function(result) {
+        $.post('/GroupChat/AddMember', { 
+            groupId: window.currentGroupId, 
+            userId: userId,
+            __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+        }, function(result) {
             if (result.success) {
-                loadGroupMembersModal();
+                setTimeout(function() {
+                    loadGroupMembersModal();
+                }, 100);
             } else {
                 alert(result.error || 'خطا در اضافه کردن');
             }
+        }).fail(function() {
+            alert('خطا در ارتباط با سرور');
         });
     });
 

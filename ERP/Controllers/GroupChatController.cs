@@ -73,8 +73,34 @@ namespace ERP.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetUserGroups()
         {
+            var guestToken = Request.Cookies["GuestToken"];
+            if (!string.IsNullOrEmpty(guestToken))
+            {
+                var guest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+
+                if (guest != null)
+                {
+                    var guestGroups = await _context.ChatGroups
+                        .Where(g => g.Members.Any(m => m.UserId == guestToken && m.IsActive))
+                        .Select(g => new
+                        {
+                            id = g.Id,
+                            name = g.Name,
+                            image = g.Image,
+                            createdBy = g.CreatedBy,
+                            memberCount = g.Members.Count(m => m.IsActive),
+                            lastMessage = g.Messages.OrderByDescending(m => m.SentAt).FirstOrDefault().Message
+                        })
+                        .ToListAsync();
+
+                    return Json(guestGroups);
+                }
+            }
+
             var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
             var groups = await _context.ChatGroups
@@ -94,29 +120,63 @@ namespace ERP.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetGroupMembers(int groupId)
         {
-            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var guestToken = Request.Cookies["GuestToken"];
+            string currentUserId;
+            
+            if (!string.IsNullOrEmpty(guestToken))
+            {
+                var guest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+                if (guest != null)
+                    currentUserId = guestToken;
+                else
+                    return Json(new { success = false, error = "احراز هویت نشده" });
+            }
+            else
+            {
+                currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            }
+            
             var isMember = await _context.GroupMembers.AnyAsync(m => m.GroupId == groupId && m.UserId == currentUserId && m.IsActive);
             
             if (!isMember)
                 return Json(new { success = false, error = "دسترسی رد شد" });
 
-            var members = await _context.GroupMembers
+            var memberIds = await _context.GroupMembers
                 .Where(m => m.GroupId == groupId && m.IsActive)
-                .Join(_context.Users,
-                    gm => gm.UserId,
-                    u => u.Id,
-                    (gm, u) => new
-                    {
-                        userId = gm.UserId,
-                        isAdmin = gm.IsAdmin,
-                        userName = u.FirstName + " " + u.LastName,
-                        userImage = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image
-                    })
+                .Select(m => m.UserId)
                 .ToListAsync();
 
-            return Json(members);
+            var userIds = memberIds.ToList();
+            var userMembers = await _context.Users
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => new
+                {
+                    userId = u.Id,
+                    isAdmin = _context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == u.Id && gm.IsAdmin),
+                    userName = u.FirstName + " " + u.LastName,
+                    userImage = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image
+                })
+                .ToListAsync();
+
+            var guestTokens = memberIds.Where(id => id.Length > 36).ToList();
+            var guestMembers = await _context.GuestUsers
+                .Where(g => guestTokens.Contains(g.UniqueToken) && g.IsActive)
+                .Select(g => new
+                {
+                    userId = g.UniqueToken,
+                    isAdmin = false,
+                    userName = g.FirstName + " " + g.LastName + " (مهمان)",
+                    userImage = string.IsNullOrEmpty(g.Image) ? "/UserImage/Male.png" : "/UserImage/" + g.Image
+                })
+                .ToListAsync();
+
+            var allMembers = userMembers.Concat(guestMembers).ToList();
+
+            return Json(allMembers);
         }
 
         [HttpPost]
@@ -165,14 +225,28 @@ namespace ERP.Controllers
         }
 
         [HttpPost]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RemoveMember(int groupId, string userId)
         {
             try
             {
-                var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (string.IsNullOrEmpty(currentUserId))
-                    return Json(new { success = false, error = "احراز هویت نشده" });
+                var guestToken = Request.Cookies["GuestToken"];
+                string currentUserId;
+                
+                if (!string.IsNullOrEmpty(guestToken))
+                {
+                    var guest = await _context.GuestUsers
+                        .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+                    if (guest != null)
+                        currentUserId = guestToken;
+                    else
+                        return Json(new { success = false, error = "احراز هویت نشده" });
+                }
+                else
+                {
+                    currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                }
                 
                 if (string.IsNullOrEmpty(userId))
                     return Json(new { success = false, error = "شناسه کاربر نامعتبر است" });
@@ -201,7 +275,17 @@ namespace ERP.Controllers
                 await _context.SaveChangesAsync();
 
                 var user = await _context.Users.FindAsync(userId);
-                var userName = user?.FirstName + " " + user?.LastName;
+                string userName;
+                
+                if (user != null)
+                {
+                    userName = user.FirstName + " " + user.LastName;
+                }
+                else
+                {
+                    var guestUser = await _context.GuestUsers.FirstOrDefaultAsync(g => g.UniqueToken == userId);
+                    userName = guestUser?.FirstName + " " + guestUser?.LastName;
+                }
             
                 var leaveMessage = new GroupMessage
                 {
@@ -246,6 +330,7 @@ namespace ERP.Controllers
         }
 
         [HttpGet]
+        [AllowAnonymous]
         public async Task<IActionResult> GetGroupMessages(int groupId, int page = 1, int pageSize = 50)
         {
             try
@@ -261,8 +346,6 @@ namespace ERP.Controllers
                 var result = new List<object>();
                 foreach (var m in messages)
                 {
-                    var sender = await _context.Users.FindAsync(m.SenderId);
-                    
                     if (m.Message.Contains("گروه را ترک کرد"))
                     {
                         result.Add(new
@@ -285,12 +368,28 @@ namespace ERP.Controllers
                     }
                     else
                     {
+                        var sender = await _context.Users.FindAsync(m.SenderId);
+                        string senderName;
+                        string senderImage;
+                        
+                        if (sender != null)
+                        {
+                            senderName = sender.FirstName + " " + sender.LastName;
+                            senderImage = string.IsNullOrEmpty(sender.Image) ? "/UserImage/Male.png" : "/UserImage/" + sender.Image;
+                        }
+                        else
+                        {
+                            var guestSender = await _context.GuestUsers.FirstOrDefaultAsync(g => g.UniqueToken == m.SenderId);
+                            senderName = guestSender?.FirstName + " " + guestSender?.LastName;
+                            senderImage = string.IsNullOrEmpty(guestSender?.Image) ? "/UserImage/Male.png" : "/UserImage/" + guestSender.Image;
+                        }
+                        
                         result.Add(new
                         {
                             id = m.Id,
                             senderId = m.SenderId,
-                            senderName = sender?.FirstName + " " + sender?.LastName,
-                            senderImage = string.IsNullOrEmpty(sender?.Image) ? "/UserImage/Male.png" : "/UserImage/" + sender.Image,
+                            senderName = senderName,
+                            senderImage = senderImage,
                             message = m.Message,
                             sentAt = m.SentAt.ToString("HH:mm"),
                             dateAt = _services.iGregorianToPersian(m.SentAt),
@@ -314,12 +413,29 @@ namespace ERP.Controllers
         }
 
         [HttpPost]
+        [AllowAnonymous]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SendGroupMessage(int groupId, string message, int? replyToMessageId = null)
         {
             try
             {
-                var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var guestToken = Request.Cookies["GuestToken"];
+                string currentUserId;
+                
+                if (!string.IsNullOrEmpty(guestToken))
+                {
+                    var guest = await _context.GuestUsers
+                        .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+                    if (guest != null)
+                        currentUserId = guestToken;
+                    else
+                        return Json(new { success = false, error = "احراز هویت نشده" });
+                }
+                else
+                {
+                    currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                }
+                
                 var group = await _context.ChatGroups.FindAsync(groupId);
 
                 if (group == null)
@@ -337,8 +453,17 @@ namespace ERP.Controllers
                     if (repliedMessage != null)
                     {
                         replyToMessage = repliedMessage.Message;
+                        
                         var sender = await _context.Users.FindAsync(repliedMessage.SenderId);
-                        replyToSenderName = sender?.FirstName + " " + sender?.LastName;
+                        if (sender != null)
+                        {
+                            replyToSenderName = sender.FirstName + " " + sender.LastName;
+                        }
+                        else
+                        {
+                            var guestSender = await _context.GuestUsers.FirstOrDefaultAsync(g => g.UniqueToken == repliedMessage.SenderId);
+                            replyToSenderName = guestSender?.FirstName + " " + guestSender?.LastName;
+                        }
                     }
                 }
 
@@ -360,14 +485,28 @@ namespace ERP.Controllers
                 await _context.SaveChangesAsync();
 
                 var senderUser = await _context.Users.FindAsync(currentUserId);
+                string senderName;
+                string senderImage;
+                
+                if (senderUser != null)
+                {
+                    senderName = senderUser.FirstName + " " + senderUser.LastName;
+                    senderImage = string.IsNullOrEmpty(senderUser.Image) ? "/UserImage/Male.png" : "/UserImage/" + senderUser.Image;
+                }
+                else
+                {
+                    var guestSender = await _context.GuestUsers.FirstOrDefaultAsync(g => g.UniqueToken == currentUserId);
+                    senderName = guestSender?.FirstName + " " + guestSender?.LastName;
+                    senderImage = string.IsNullOrEmpty(guestSender?.Image) ? "/UserImage/Male.png" : "/UserImage/" + guestSender.Image;
+                }
 
                 await _hubContext.Clients.Group($"group-{groupId}").SendAsync("ReceiveGroupMessage", new
                 {
                     id = groupMessage.Id,
                     groupId = groupId,
                     senderId = currentUserId,
-                    senderName = senderUser?.FirstName + " " + senderUser?.LastName,
-                    senderImage = string.IsNullOrEmpty(senderUser?.Image) ? "/UserImage/Male.png" : "/UserImage/" + senderUser.Image,
+                    senderName = senderName,
+                    senderImage = senderImage,
                     message = message,
                     sentAt = groupMessage.SentAt.ToString("HH:mm"),
                     dateAt = _services.iGregorianToPersian(groupMessage.SentAt),

@@ -120,49 +120,106 @@ namespace ERP.Controllers
                 return NotFound();
             }
             var allUsers = await _context.Set<Users>().ToListAsync();
+            var allGuests = await _context.GuestUsers
+                .Where(g => g.IsActive && g.ExpiryDate > DateTime.Now)
+                .ToListAsync();
+
+            var members = allUsers
+                .Where(u => group.UserGroups.Any(ug => ug.UserID == u.Id))
+                .Select(u => new UserViewModel
+                {
+                    UserID = u.Id,
+                    FullName = $"{u.FirstName} {u.LastName}"
+                }).ToList();
+
+            var guestMembers = allGuests
+                .Where(g => g.GroupId.HasValue && g.GroupId == id)
+                .Select(g => new UserViewModel
+                {
+                    UserID = g.Id.ToString(),
+                    FullName = $"{g.FirstName} {g.LastName}",
+                    IsGuest = true
+                }).ToList();
+
+            var nonMembers = allUsers
+                .Where(u => !group.UserGroups.Any(ug => ug.UserID == u.Id))
+                .Select(u => new UserViewModel
+                {
+                    UserID = u.Id,
+                    FullName = $"{u.FirstName} {u.LastName}"
+                }).ToList();
+
+            var guestNonMembers = allGuests
+                .Where(g => !g.GroupId.HasValue || g.GroupId != id)
+                .Select(g => new UserViewModel
+                {
+                    UserID = g.Id.ToString(),
+                    FullName = $"{g.FirstName} {g.LastName}",
+                    IsGuest = true
+                }).ToList();
+
             var model = new ManageUsersViewModel
             {
                 GroupID = group.GroupID,
                 GroupName = group.Name,
-                Members = allUsers
-                    .Where(u => group.UserGroups.Any(ug => ug.UserID == u.Id))
-                    .Select(u => new UserViewModel
-                    {
-                        UserID = u.Id,
-                        FullName = $"{u.FirstName} {u.LastName}"
-                    }).ToList(),
-                NonMembers = allUsers
-                    .Where(u => !group.UserGroups.Any(ug => ug.UserID == u.Id))
-                    .Select(u => new UserViewModel
-                    {
-                        UserID = u.Id,
-                        FullName = $"{u.FirstName} {u.LastName}"
-                    }).ToList()
+                Members = members,
+                GuestMembers = guestMembers,
+                NonMembers = nonMembers.Concat(guestNonMembers).ToList()
             };
 
             return View(model);
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddUserToGroup(int groupId, string userId)
+        public async Task<IActionResult> AddUserToGroup(int groupId, string userId, bool isGuest = false)
         {
-            if (!await _context.UserGroups.AnyAsync(ug => ug.GroupID == groupId && ug.UserID == userId))
+            if (isGuest)
             {
-                _context.UserGroups.Add(new UserGroup { GroupID = groupId, UserID = userId });
-                await _context.SaveChangesAsync();
+                if (int.TryParse(userId, out int guestId))
+                {
+                    var guest = await _context.GuestUsers.FindAsync(guestId);
+                    if (guest != null)
+                    {
+                        guest.GroupId = groupId;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+            }
+            else
+            {
+                if (!await _context.UserGroups.AnyAsync(ug => ug.GroupID == groupId && ug.UserID == userId))
+                {
+                    _context.UserGroups.Add(new UserGroup { GroupID = groupId, UserID = userId });
+                    await _context.SaveChangesAsync();
+                }
             }
             return Json(new { success = true });
         }
 
         [HttpPost]
-        public async Task<IActionResult> RemoveUserFromGroup(int groupId, string userId)
+        public async Task<IActionResult> RemoveUserFromGroup(int groupId, string userId, bool isGuest = false)
         {
-            var userGroup = await _context.UserGroups
-                .FirstOrDefaultAsync(ug => ug.GroupID == groupId && ug.UserID == userId);
-            if (userGroup != null)
+            if (isGuest)
             {
-                _context.UserGroups.Remove(userGroup);
-                await _context.SaveChangesAsync();
+                if (int.TryParse(userId, out int guestId))
+                {
+                    var guest = await _context.GuestUsers.FindAsync(guestId);
+                    if (guest != null && guest.GroupId == groupId)
+                    {
+                        guest.GroupId = null;
+                        await _context.SaveChangesAsync();
+                    }
+                }
+            }
+            else
+            {
+                var userGroup = await _context.UserGroups
+                    .FirstOrDefaultAsync(ug => ug.GroupID == groupId && ug.UserID == userId);
+                if (userGroup != null)
+                {
+                    _context.UserGroups.Remove(userGroup);
+                    await _context.SaveChangesAsync();
+                }
             }
             return Json(new { success = true });
         }
@@ -180,6 +237,7 @@ namespace ERP.Controllers
         public int GroupID { get; set; }
         public string GroupName { get; set; }
         public List<UserViewModel> Members { get; set; } = new List<UserViewModel>();
+        public List<UserViewModel> GuestMembers { get; set; } = new List<UserViewModel>();
         public List<UserViewModel> NonMembers { get; set; } = new List<UserViewModel>();
     }
 
@@ -187,5 +245,6 @@ namespace ERP.Controllers
     {
         public string UserID { get; set; }
         public string FullName { get; set; }
+        public bool IsGuest { get; set; }
     }
 }

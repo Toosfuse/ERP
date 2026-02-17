@@ -304,5 +304,10 @@ namespace ERP.Controllers
             ViewBag.UserId = userId;
             return View();
         }
+
+        public IActionResult GuestAccessControl()
+        {
+            return View();
+        }
     }
 }

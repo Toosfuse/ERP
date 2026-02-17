@@ -152,7 +152,13 @@ namespace ERP.Hubs
         public async Task JoinGroup(int groupId)
         {
             var userId = GetUserId();
-            if (userId != null)
+            var guestToken = GetGuestToken();
+            
+            if (!string.IsNullOrEmpty(userId))
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, $"group-{groupId}");
+            }
+            else if (!string.IsNullOrEmpty(guestToken))
             {
                 await Groups.AddToGroupAsync(Context.ConnectionId, $"group-{groupId}");
             }
@@ -161,7 +167,13 @@ namespace ERP.Hubs
         public async Task LeaveGroup(int groupId)
         {
             var userId = GetUserId();
-            if (userId != null)
+            var guestToken = GetGuestToken();
+            
+            if (!string.IsNullOrEmpty(userId))
+            {
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"group-{groupId}");
+            }
+            else if (!string.IsNullOrEmpty(guestToken))
             {
                 await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"group-{groupId}");
             }

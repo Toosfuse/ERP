@@ -17,8 +17,8 @@ $(document).ready(function() {
         .build();
 
     connection.start()
-        .then(() => console.log('SignalR متصل شد'))
-        .catch(err => console.error('خطا:', err));
+        .then(() => {})
+        .catch(err => {});
 
     connection.on("RefreshUsersList", function () {
         window.location.reload();
@@ -219,12 +219,8 @@ $(document).ready(function() {
             if (editingMessageId) {
                 editMessage();
             } else if (window.currentGroupId) {
-                console.log(window.currentGroupId);
-
                 sendGroupMessage();
             } else {
-                console.log("1");
-
                 sendMessage();
             }
         } else {
@@ -708,11 +704,7 @@ function sendMessage() {
                 userItem.prependTo('.users-list');
                 updateUserLastMessage(currentUserId, message);
             }
-        } else {
-            console.error(result.error);
         }
-    }).fail(function(err) {
-        console.error('خطا در ارسال پیام', err);
     });
 }
 
@@ -1032,11 +1024,7 @@ function sendGroupMessage() {
             replyingToMessageId = null;
             $('#replyIndicator').remove();
             scrollToBottom();
-        } else {
-            console.error(result.error);
         }
-    }).fail(function(err) {
-        console.error('خطا در ارسال پیام گروهی', err);
     });
 }
 
@@ -1066,7 +1054,7 @@ function selectGroup(groupId) {
         }
     });
     
-    connection.invoke('JoinGroup', groupId).catch(err => console.error('Error joining group:', err));
+    connection.invoke('JoinGroup', groupId).catch(err => {});
     loadGroupMessages(groupId);
 }
 
@@ -1083,10 +1071,7 @@ function loadGroupMessages(groupId) {
 }
 
 function addGroupMessageToChat(msg) {
-    console.log('Received group message:', msg);
-    
     if (msg.isNotification) {
-        console.log('Displaying notification message');
         const html = `
             <div class="group-notification" style="text-align:center;padding:10px;margin:10px 0;background:#fff3cd;border-radius:8px;color:#856404;font-size:13px;">
                 <i class="fa fa-sign-out" style="margin-left:5px;"></i>

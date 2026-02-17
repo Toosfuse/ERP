@@ -1062,11 +1062,34 @@ namespace ERP.Controllers
                 .Select(u => new {
                     id = u.Id,
                     name = u.FirstName + " " + u.LastName,
-                    image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image
+                    image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image,
+                    isGuest = false
                 })
                 .ToListAsync();
             
-            return Json(allUsers);
+            var approvedGuestIds = await _context.GuestChatAccesses
+                .Select(a => a.GuestUserId)
+                .Distinct()
+                .ToListAsync();
+
+            var approvedGuests = await _context.GuestUsers
+                .Where(g => g.IsActive && approvedGuestIds.Contains(g.Id))
+                .Select(g => new {
+                    id = g.UniqueToken,
+                    name = g.FirstName + " " + g.LastName,
+                    image = string.IsNullOrEmpty(g.Image) ? "/UserImage/Male.png" : "/UserImage/" + g.Image,
+                    isGuest = true
+                })
+                .ToListAsync();
+            
+            var combined = allUsers.Concat(approvedGuests.Select(g => new {
+                id = g.id,
+                name = g.name,
+                image = g.image,
+                isGuest = g.isGuest
+            })).ToList();
+            
+            return Json(combined);
         }
 
         [HttpGet]
@@ -1377,6 +1400,186 @@ namespace ERP.Controllers
                 .CountAsync(m => m.ReceiverId == currentUserId && !m.IsRead && !m.IsDeletedByReceiver);
             
             return Json(new { unreadCount = count });
+        }
+
+        [HttpGet]
+        [Authorize(Roles = "SuperAdmin")]
+        public async Task<IActionResult> GetAllGuests()
+        {
+            var approvedGuestIds = await _context.GuestChatAccesses
+                .Select(a => a.GuestUserId)
+                .Distinct()
+                .ToListAsync();
+
+            var pending = await _context.GuestUsers
+                .Where(g => g.IsActive && !approvedGuestIds.Contains(g.Id))
+                .Select(g => new {
+                    id = g.Id,
+                    name = g.FirstName + " " + g.LastName,
+                    phoneNumber = g.PhoneNumber,
+                    image = string.IsNullOrEmpty(g.Image) ? "/UserImage/Male.png" : "/UserImage/" + g.Image
+                })
+                .ToListAsync();
+
+            var approved = await _context.GuestUsers
+                .Where(g => g.IsActive && approvedGuestIds.Contains(g.Id))
+                .Select(g => new {
+                    id = g.Id,
+                    name = g.FirstName + " " + g.LastName,
+                    phoneNumber = g.PhoneNumber,
+                    image = string.IsNullOrEmpty(g.Image) ? "/UserImage/Male.png" : "/UserImage/" + g.Image
+                })
+                .ToListAsync();
+
+            return Json(new { pending, approved });
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "SuperAdmin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ApproveGuest(int guestId)
+        {
+            var guest = await _context.GuestUsers.FindAsync(guestId);
+            if (guest == null)
+                return Json(new { success = false, error = "مهمان یافت نشد" });
+
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var existing = await _context.GuestChatAccesses
+                .FirstOrDefaultAsync(a => a.GuestUserId == guestId);
+
+            if (existing == null)
+            {
+                _context.GuestChatAccesses.Add(new GuestChatAccess
+                {
+                    GuestUserId = guestId,
+                    AllowedUserId = currentUserId,
+                    GrantedDate = DateTime.Now
+                });
+                await _context.SaveChangesAsync();
+            }
+
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "SuperAdmin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RejectGuest(int guestId)
+        {
+            var accesses = await _context.GuestChatAccesses
+                .Where(a => a.GuestUserId == guestId)
+                .ToListAsync();
+
+            _context.GuestChatAccesses.RemoveRange(accesses);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "SuperAdmin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ApproveMultipleGuests(List<int> guestIds)
+        {
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            foreach (var guestId in guestIds)
+            {
+                var existing = await _context.GuestChatAccesses
+                    .FirstOrDefaultAsync(a => a.GuestUserId == guestId);
+
+                if (existing == null)
+                {
+                    _context.GuestChatAccesses.Add(new GuestChatAccess
+                    {
+                        GuestUserId = guestId,
+                        AllowedUserId = currentUserId,
+                        GrantedDate = DateTime.Now
+                    });
+                }
+            }
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
+        }
+
+        [HttpGet]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetAllUsersAndGuests()
+        {
+            var guestToken = Request.Cookies["GuestToken"];
+            if (!string.IsNullOrEmpty(guestToken))
+            {
+                var guest = await _context.GuestUsers
+                    .FirstOrDefaultAsync(g => g.UniqueToken == guestToken && g.IsActive && g.ExpiryDate > DateTime.Now);
+
+                if (guest != null && guest.GroupId.HasValue)
+                {
+                    var userIdsInGroup = await _context.UserGroups
+                        .Where(ug => ug.GroupID == guest.GroupId.Value)
+                        .Select(ug => ug.UserID)
+                        .ToListAsync();
+
+                    var users = await _context.Users
+                        .Where(u => userIdsInGroup.Contains(u.Id))
+                        .Select(u => new {
+                            id = u.Id,
+                            name = u.FirstName + " " + u.LastName,
+                            image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image,
+                            isGuest = false
+                        })
+                        .ToListAsync();
+
+                    Console.WriteLine($"تعداد کاربران مهمان پیدا شده: {users.Count}");
+                    return Json(new { users = users, guests = new List<object>() });
+                }
+            }
+
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            
+            var blockedUsers = await _context.ChatAccesses
+                .Where(c => c.UserId == currentUserId && !c.IsBlocked)
+                .Select(c => c.AllowedUserId)
+                .ToListAsync();
+            
+            var users2 = await _context.Users
+                .Where(u => u.Id != currentUserId && blockedUsers.Contains(u.Id))
+                .Select(u => new {
+                    id = u.Id,
+                    name = u.FirstName + " " + u.LastName,
+                    image = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image,
+                    isGuest = false
+                })
+                .ToListAsync();
+            
+            var approvedGuestIds = await _context.GuestChatAccesses
+                .Select(a => a.GuestUserId)
+                .Distinct()
+                .ToListAsync();
+
+            var guests = await _context.GuestUsers
+                .Where(g => g.IsActive && approvedGuestIds.Contains(g.Id))
+                .Select(g => new {
+                    id = g.UniqueToken,
+                    name = g.FirstName + " " + g.LastName,
+                    image = string.IsNullOrEmpty(g.Image) ? "/UserImage/Male.png" : "/UserImage/" + g.Image,
+                    isGuest = true
+                })
+                .ToListAsync();
+            
+            return Json(new { users = users2, guests = guests });
+        }
+
+        [HttpPost]
+        [Authorize(Roles = "SuperAdmin")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RejectAllGuests()
+        {
+            var accesses = await _context.GuestChatAccesses.ToListAsync();
+            _context.GuestChatAccesses.RemoveRange(accesses);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true });
         }
     }
 }
