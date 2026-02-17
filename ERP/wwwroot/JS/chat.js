@@ -1083,6 +1083,20 @@ function loadGroupMessages(groupId) {
 }
 
 function addGroupMessageToChat(msg) {
+    console.log('Received group message:', msg);
+    
+    if (msg.isNotification) {
+        console.log('Displaying notification message');
+        const html = `
+            <div class="group-notification" style="text-align:center;padding:10px;margin:10px 0;background:#fff3cd;border-radius:8px;color:#856404;font-size:13px;">
+                <i class="fa fa-sign-out" style="margin-left:5px;"></i>
+                ${escapeHtml(msg.message)}
+            </div>
+        `;
+        $('#chatMessages').append(html);
+        return;
+    }
+    
     const isMine = msg.senderId === window.myUserId;
     let replyBox = '';
     

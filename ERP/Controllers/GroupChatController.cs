@@ -168,35 +168,81 @@ namespace ERP.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> RemoveMember(int groupId, string userId)
         {
-            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            try
+            {
+                var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(currentUserId))
+                    return Json(new { success = false, error = "احراز هویت نشده" });
+                
+                if (string.IsNullOrEmpty(userId))
+                    return Json(new { success = false, error = "شناسه کاربر نامعتبر است" });
             
-            var group = await _context.ChatGroups.FindAsync(groupId);
-            if (group == null)
-                return Json(new { success = false, error = "گروه یافت نشد" });
+                var group = await _context.ChatGroups.FindAsync(groupId);
+                if (group == null)
+                    return Json(new { success = false, error = "گروه یافت نشد" });
 
-            if (group.CreatedBy == userId)
-                return Json(new { success = false, error = "مدیر گروه نمیتواند از گروه خارج شود" });
+                if (group.CreatedBy == userId)
+                    return Json(new { success = false, error = "مدیر گروه نمیتواند از گروه خارج شود" });
             
-            var isAdmin = await _context.GroupMembers
-                .AnyAsync(m => m.GroupId == groupId && m.UserId == currentUserId && m.IsAdmin);
+                var isAdmin = await _context.GroupMembers
+                    .AnyAsync(m => m.GroupId == groupId && m.UserId == currentUserId && m.IsAdmin && m.IsActive);
 
-            if (!isAdmin && userId != currentUserId)
-                return Json(new { success = false, error = "فقط ادمین یا خود شخص میتواند حذف کند" });
+                if (!isAdmin && userId != currentUserId)
+                    return Json(new { success = false, error = "فقط ادمین یا خود شخص میتواند حذف کند" });
 
-            var member = await _context.GroupMembers
-                .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == userId && m.IsActive);
+                var member = await _context.GroupMembers
+                    .FirstOrDefaultAsync(m => m.GroupId == groupId && m.UserId == userId && m.IsActive);
 
-            if (member == null)
-                return Json(new { success = false, error = "عضو یافت نشد" });
+                if (member == null)
+                    return Json(new { success = false, error = "عضو یافت نشد" });
 
-            member.IsActive = false;
-            member.LeftAt = DateTime.Now;
-            await _context.SaveChangesAsync();
+                member.IsActive = false;
+                member.LeftAt = DateTime.Now;
+                await _context.SaveChangesAsync();
 
-            var memberCount = await _context.GroupMembers.CountAsync(m => m.GroupId == groupId && m.IsActive);
-            await _hubContext.Clients.All.SendAsync("GroupMemberCountUpdated", groupId, memberCount);
+                var user = await _context.Users.FindAsync(userId);
+                var userName = user?.FirstName + " " + user?.LastName;
+            
+                var leaveMessage = new GroupMessage
+                {
+                    GroupId = groupId,
+                    SenderId = userId,
+                    Message = $"{userName} گروه را ترک کرد",
+                    SentAt = DateTime.Now,
+                    IsEdited = false,
+                    AttachmentPath = "",
+                    AttachmentName = "",
+                    ReplyToMessage = "",
+                    ReplyToSenderName = ""
+                };
+                _context.GroupMessages.Add(leaveMessage);
+                await _context.SaveChangesAsync();
 
-            return Json(new { success = true });
+                var memberCount = await _context.GroupMembers.CountAsync(m => m.GroupId == groupId && m.IsActive);
+                await _hubContext.Clients.All.SendAsync("GroupMemberCountUpdated", groupId, memberCount);
+            
+                var leaveMessageData = new
+                {
+                    id = leaveMessage.Id,
+                    groupId = groupId,
+                    senderId = userId,
+                    senderName = "",
+                    senderImage = "",
+                    message = $"{userName} گروه را ترک کرد",
+                    sentAt = leaveMessage.SentAt.ToString("HH:mm"),
+                    dateAt = _services.iGregorianToPersian(leaveMessage.SentAt),
+                    isNotification = true
+                };
+            
+                System.Diagnostics.Debug.WriteLine($"Sending leave message: {leaveMessageData.message}");
+                await _hubContext.Clients.Group($"group-{groupId}").SendAsync("ReceiveGroupMessage", leaveMessageData);
+
+                return Json(new { success = true, shouldRefresh = userId == currentUserId });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, error = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -216,22 +262,47 @@ namespace ERP.Controllers
                 foreach (var m in messages)
                 {
                     var sender = await _context.Users.FindAsync(m.SenderId);
-                    result.Add(new
+                    
+                    if (m.Message.Contains("گروه را ترک کرد"))
                     {
-                        id = m.Id,
-                        senderId = m.SenderId,
-                        senderName = sender?.FirstName + " " + sender?.LastName,
-                        senderImage = string.IsNullOrEmpty(sender?.Image) ? "/UserImage/Male.png" : "/UserImage/" + sender.Image,
-                        message = m.Message,
-                        sentAt = m.SentAt.ToString("HH:mm"),
-                        dateAt = _services.iGregorianToPersian(m.SentAt),
-                        isEdited = m.IsEdited,
-                        attachmentPath = m.AttachmentPath,
-                        attachmentName = m.AttachmentName,
-                        replyToMessageId = m.ReplyToMessageId,
-                        replyToMessage = m.ReplyToMessage,
-                        replyToSenderName = m.ReplyToSenderName
-                    });
+                        result.Add(new
+                        {
+                            id = m.Id,
+                            senderId = m.SenderId,
+                            senderName = "",
+                            senderImage = "",
+                            message = m.Message,
+                            sentAt = m.SentAt.ToString("HH:mm"),
+                            dateAt = _services.iGregorianToPersian(m.SentAt),
+                            isEdited = false,
+                            attachmentPath = "",
+                            attachmentName = "",
+                            replyToMessageId = (int?)null,
+                            replyToMessage = "",
+                            replyToSenderName = "",
+                            isNotification = true
+                        });
+                    }
+                    else
+                    {
+                        result.Add(new
+                        {
+                            id = m.Id,
+                            senderId = m.SenderId,
+                            senderName = sender?.FirstName + " " + sender?.LastName,
+                            senderImage = string.IsNullOrEmpty(sender?.Image) ? "/UserImage/Male.png" : "/UserImage/" + sender.Image,
+                            message = m.Message,
+                            sentAt = m.SentAt.ToString("HH:mm"),
+                            dateAt = _services.iGregorianToPersian(m.SentAt),
+                            isEdited = m.IsEdited,
+                            attachmentPath = m.AttachmentPath,
+                            attachmentName = m.AttachmentName,
+                            replyToMessageId = m.ReplyToMessageId,
+                            replyToMessage = m.ReplyToMessage,
+                            replyToSenderName = m.ReplyToSenderName,
+                            isNotification = false
+                        });
+                    }
                 }
 
                 return Json(result);

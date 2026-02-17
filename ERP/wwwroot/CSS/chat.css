@@ -1,7 +1,25 @@
+
+@font-face {
+    font-family: 'yekan';
+    src: url("../../fonts/yekanweb.eot");
+    src: url("../../fonts/yekanweb.eot?#iefix") format("embedded-opentype"),url("../../fonts/yekanweb.woff") format("woff"),url("../../fonts/yekanweb.ttf") format("truetype"),url("../../fonts/yekanweb.svg#web_Yekan") format("svg");
+    font-style: normal;
+    font-weight: normal;
+    text-rendering: optimizeLegibility;
+}
+
+@font-face {
+    font-family: 'numbers';
+    src: url("../../fonts/yekannumbers.eot");
+    src: url("../../fonts/yekannumbers.eot?#iefix") format("embedded-opentype"),url("../../fonts/yekannumbers.woff") format("woff"),url("../../fonts/yekannumbers.ttf") format("truetype"),url("../../fonts/yekannumbers.svg#web_Yekan") format("svg");
+    font-style: normal;
+    font-weight: normal;
+    text-rendering: optimizeLegibility;
+}
 body {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: "yekan","numbers";
 }
 
 input::placeholder {

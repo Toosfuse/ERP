@@ -1,3 +1,22 @@
+
+@font-face {
+    font-family: 'yekan';
+    src: url("../../fonts/yekanweb.eot");
+    src: url("../../fonts/yekanweb.eot?#iefix") format("embedded-opentype"),url("../../fonts/yekanweb.woff") format("woff"),url("../../fonts/yekanweb.ttf") format("truetype"),url("../../fonts/yekanweb.svg#web_Yekan") format("svg");
+    font-style: normal;
+    font-weight: normal;
+    text-rendering: optimizeLegibility;
+}
+
+@font-face {
+    font-family: 'numbers';
+    src: url("../../fonts/yekannumbers.eot");
+    src: url("../../fonts/yekannumbers.eot?#iefix") format("embedded-opentype"),url("../../fonts/yekannumbers.woff") format("woff"),url("../../fonts/yekannumbers.ttf") format("truetype"),url("../../fonts/yekannumbers.svg#web_Yekan") format("svg");
+    font-style: normal;
+    font-weight: normal;
+    text-rendering: optimizeLegibility;
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -5,7 +24,7 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: "yekan","numbers";
     background: #f5f7fa;
     min-height: 100vh;
 }

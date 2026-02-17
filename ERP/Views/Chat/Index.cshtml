@@ -568,7 +568,11 @@
         if (confirm('آیا مطمئن هستید؟')) {
             $.post('/GroupChat/RemoveMember', { groupId: window.currentGroupId, userId: userId }, function(result) {
                 if (result.success) {
-                    loadGroupMembersModal();
+                    if (result.shouldRefresh) {
+                        window.location.reload();
+                    } else {
+                        loadGroupMembersModal();
+                    }
                 } else {
                     alert(result.error || 'خطا در حذف');
                 }
