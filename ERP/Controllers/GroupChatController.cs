@@ -150,31 +150,37 @@ namespace ERP.Controllers
                 .Select(m => m.UserId)
                 .ToListAsync();
 
-            var userIds = memberIds.ToList();
-            var userMembers = await _context.Users
-                .Where(u => userIds.Contains(u.Id))
-                .Select(u => new
+            var allMembers = new List<object>();
+            
+            foreach (var memberId in memberIds)
+            {
+                var user = await _context.Users.FindAsync(memberId);
+                if (user != null)
                 {
-                    userId = u.Id,
-                    isAdmin = _context.GroupMembers.Any(gm => gm.GroupId == groupId && gm.UserId == u.Id && gm.IsAdmin),
-                    userName = u.FirstName + " " + u.LastName,
-                    userImage = string.IsNullOrEmpty(u.Image) ? "/UserImage/Male.png" : "/UserImage/" + u.Image
-                })
-                .ToListAsync();
-
-            var guestTokens = memberIds.Where(id => id.Length > 36).ToList();
-            var guestMembers = await _context.GuestUsers
-                .Where(g => guestTokens.Contains(g.UniqueToken) && g.IsActive)
-                .Select(g => new
+                    var isAdmin = await _context.GroupMembers.AnyAsync(gm => gm.GroupId == groupId && gm.UserId == memberId && gm.IsAdmin);
+                    allMembers.Add(new
+                    {
+                        userId = user.Id,
+                        isAdmin = isAdmin,
+                        userName = user.FirstName + " " + user.LastName,
+                        userImage = string.IsNullOrEmpty(user.Image) ? "/UserImage/Male.png" : "/UserImage/" + user.Image
+                    });
+                }
+                else
                 {
-                    userId = g.UniqueToken,
-                    isAdmin = false,
-                    userName = g.FirstName + " " + g.LastName + " (مهمان)",
-                    userImage = string.IsNullOrEmpty(g.Image) ? "/UserImage/Male.png" : "/UserImage/" + g.Image
-                })
-                .ToListAsync();
-
-            var allMembers = userMembers.Concat(guestMembers).ToList();
+                    var guest = await _context.GuestUsers.FirstOrDefaultAsync(g => g.UniqueToken == memberId && g.IsActive);
+                    if (guest != null)
+                    {
+                        allMembers.Add(new
+                        {
+                            userId = guest.UniqueToken,
+                            isAdmin = false,
+                            userName = guest.FirstName + " " + guest.LastName + " (مهمان)",
+                            userImage = string.IsNullOrEmpty(guest.Image) ? "/UserImage/Male.png" : "/UserImage/" + guest.Image
+                        });
+                    }
+                }
+            }
 
             return Json(allMembers);
         }

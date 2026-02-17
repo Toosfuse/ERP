@@ -503,12 +503,38 @@
                 
                 if (isAdmin) {
                     $.get('/Chat/GetAllUsersAndGuests', function(data) {
-                        const allUsersAndGuests = data.users.concat(data.guests);
+                        const allUsersAndGuests = [];
+                        
+                        // اضافه کردن کاربران شرکت
+                        if (data.users) {
+                            data.users.forEach(u => {
+                                allUsersAndGuests.push({
+                                    id: u.id,
+                                    name: u.name,
+                                    image: u.image,
+                                    isGuest: false
+                                });
+                            });
+                        }
+                        
+                        // اضافه کردن مهمانان
+                        if (data.guests) {
+                            data.guests.forEach(g => {
+                                allUsersAndGuests.push({
+                                    id: g.id,
+                                    name: g.name,
+                                    image: g.image,
+                                    isGuest: true
+                                });
+                            });
+                        }
+                        
                         window.allUsers = allUsersAndGuests;
                         $('#selectedGroupMembersList').parent().show();
                         displayGroupMembersForAdmin(members, allUsersAndGuests);
                     });
                 } else {
+                    $('#selectedGroupMembersList').parent().hide();
                     displayGroupMembersForUser(members);
                 }
             });
@@ -520,29 +546,39 @@
         let nonMembersHtml = '';
         const memberIds = members.map(m => m.userId);
         
+        // نمایش اعضای فعلی گروه
         members.forEach(function(member) {
             const isCurrentUser = member.userId === window.myUserId;
+            const isGuest = member.userName.includes('(مهمان)');
             const removeBtn = isCurrentUser ? '' : `<button class="remove-member-btn" data-user-id="${member.userId}" style="padding:5px 10px; background:#f44336; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">حذف</button>`;
             
             membersHtml += `
                 <div class="group-member-item" style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; justify-content:space-between;" data-user-id="${member.userId}">
                     <div style="display:flex; align-items:center; flex:1;">
-                        <img src="${member.userImage}" alt="${member.userName}" style="width:35px; height:35px; border-radius:50%; margin-left:10px;">
-                        <span style="font-weight:600;">${member.userName}</span>
+                        <img src="${member.userImage}" alt="${member.userName}" style="width:35px; height:35px; border-radius:50%; margin-left:10px; border:2px solid ${isGuest ? '#ff9800' : '#667eea'};">
+                        <div>
+                            <span style="font-weight:600; display:block;">${member.userName}</span>
+                            ${isGuest ? '<span style="font-size:10px; color:#ff9800; background:#fff3e0; padding:2px 6px; border-radius:3px; display:inline-block; margin-top:2px;">مهمان</span>' : '<span style="font-size:10px; color:#667eea; background:#e8eaf6; padding:2px 6px; border-radius:3px; display:inline-block; margin-top:2px;">کارمند</span>'}
+                        </div>
                     </div>
                     ${removeBtn}
                 </div>
             `;
         });
         
+        // نمایش کاربران قابل اضافه شدن (که در گروه نیستند)
         users.forEach(function(user) {
-            const userId = user.id || user.userId;
+            const userId = user.id;
             if (!memberIds.includes(userId)) {
+                const isGuest = user.isGuest === true;
                 nonMembersHtml += `
                     <div class="group-member-item" style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #eee; justify-content:space-between;" data-user-id="${userId}">
                         <div style="display:flex; align-items:center; flex:1;">
-                            <img src="${user.image}" alt="${user.name}" style="width:35px; height:35px; border-radius:50%; margin-left:10px;">
-                            <span style="font-weight:600;">${user.name}${user.isGuest ? ' (مهمان)' : ''}</span>
+                            <img src="${user.image}" alt="${user.name}" style="width:35px; height:35px; border-radius:50%; margin-left:10px; border:2px solid ${isGuest ? '#ff9800' : '#667eea'};">
+                            <div>
+                                <span style="font-weight:600; display:block;">${user.name}</span>
+                                ${isGuest ? '<span style="font-size:10px; color:#ff9800; background:#fff3e0; padding:2px 6px; border-radius:3px; display:inline-block; margin-top:2px;">مهمان</span>' : '<span style="font-size:10px; color:#667eea; background:#e8eaf6; padding:2px 6px; border-radius:3px; display:inline-block; margin-top:2px;">کارمند</span>'}
+                            </div>
                         </div>
                         <button class="add-member-btn" data-user-id="${userId}" style="padding:5px 10px; background:#4caf50; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">اضافه</button>
                     </div>

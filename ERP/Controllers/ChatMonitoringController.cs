@@ -67,8 +67,26 @@ namespace ERP.Controllers
                         isOnline = user.IsOnline,
                         isAdmin = gm.IsAdmin,
                         joinedAt = gm.JoinedAt,
-                        isActive = gm.IsActive
+                        isActive = gm.IsActive,
+                        isGuest = false
                     });
+                }
+                else
+                {
+                    var guest = await _context.GuestUsers.FirstOrDefaultAsync(g => g.UniqueToken == gm.UserId && g.IsActive);
+                    if (guest != null)
+                    {
+                        members.Add(new {
+                            userId = gm.UserId,
+                            userName = guest.FirstName + " " + guest.LastName + " (مهمان)",
+                            userImage = string.IsNullOrEmpty(guest.Image) ? "/UserImage/Male.png" : "/UserImage/" + guest.Image,
+                            isOnline = false,
+                            isAdmin = gm.IsAdmin,
+                            joinedAt = gm.JoinedAt,
+                            isActive = gm.IsActive,
+                            isGuest = true
+                        });
+                    }
                 }
             }
             return Json(members);
@@ -95,8 +113,27 @@ namespace ERP.Controllers
                         isAdmin = gm.IsAdmin,
                         joinedAt = gm.JoinedAt,
                         leftAt = gm.LeftAt,
-                        isActive = gm.IsActive
+                        isActive = gm.IsActive,
+                        isGuest = false
                     });
+                }
+                else
+                {
+                    var guest = await _context.GuestUsers.FirstOrDefaultAsync(g => g.UniqueToken == gm.UserId && g.IsActive);
+                    if (guest != null)
+                    {
+                        members.Add(new {
+                            userId = gm.UserId,
+                            userName = guest.FirstName + " " + guest.LastName + " (مهمان)",
+                            userImage = string.IsNullOrEmpty(guest.Image) ? "/UserImage/Male.png" : "/UserImage/" + guest.Image,
+                            isOnline = false,
+                            isAdmin = gm.IsAdmin,
+                            joinedAt = gm.JoinedAt,
+                            leftAt = gm.LeftAt,
+                            isActive = gm.IsActive,
+                            isGuest = true
+                        });
+                    }
                 }
             }
             return Json(members);
