@@ -69,13 +69,15 @@ namespace ERP.Data
 
         public DbSet<ChatMessage> ChatMessages { get; set; }
         public DbSet<ChatGroup> ChatGroups { get; set; }
+
         public DbSet<GroupMember> GroupMembers { get; set; }
         public DbSet<GroupMessage> GroupMessages { get; set; }
+
         public DbSet<Channel> Channels { get; set; }
         public DbSet<ChannelMember> ChannelMembers { get; set; }
         public DbSet<ChannelMessage> ChannelMessages { get; set; }
+
         public DbSet<ChatAccess> ChatAccesses { get; set; }
-        
         public DbSet<GuestUser> GuestUsers { get; set; }
         public DbSet<GuestVerificationCode> GuestVerificationCodes { get; set; }
         public DbSet<GuestChatAccess> GuestChatAccesses { get; set; }

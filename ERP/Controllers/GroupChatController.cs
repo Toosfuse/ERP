@@ -41,7 +41,7 @@ namespace ERP.Controllers
                 Name = name,
                 CreatedBy = currentUserId,
                 CreatedAt = DateTime.Now,
-                Image = "/UserImage/Male.png"
+                Image = "/UserImage/group.png"
             };
 
             _context.ChatGroups.Add(group);
