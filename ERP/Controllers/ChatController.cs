@@ -174,7 +174,7 @@ namespace ERP.Controllers
         public async Task<IActionResult> GetGroups()
         {
             var groups = await _context.Groups
-                .Where(g => g.GroupID != 4)
+                .Where(g => g.GroupID != 1)
                 .Select(g => new { id = g.GroupID, name = g.Name })
                 .ToListAsync();
             return Json(groups);

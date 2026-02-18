@@ -82,6 +82,7 @@ $(document).ready(function() {
                 </div>
             `;
             $('.users-list').prepend(newUserHtml);
+            scrollUsersList();
         } else if (userItem.length > 0) {
             userItem.prependTo('.users-list');
             userItem.find('.last-message').text(msg.message);
@@ -93,6 +94,7 @@ $(document).ready(function() {
                     userItem.append('<div class="unread-count">1</div>');
                 }
             }
+            scrollUsersList();
         }
     });
 
@@ -236,8 +238,8 @@ $(document).ready(function() {
         $('#fileInput').click();
     });
 
-    $('#fileInput').change(function() {
-        if (this.files[0]) {
+    $('#fileInput').on('change', function() {
+        if (this.files && this.files[0]) {
             uploadFile(this.files[0]);
         }
     });
@@ -271,6 +273,17 @@ $(document).ready(function() {
 
     $('#restoreChatBtn').click(function() {
         restoreChat();
+    });
+
+    $(document).on('click', '.back-to-users-btn', function() {
+        $('.chat-container').removeClass('fullscreen');
+        currentUserId = null;
+        window.currentGroupId = null;
+        $('#chatHeader').hide();
+        $('#chatInput').hide();
+        $('#chatMessages').empty();
+        $('.no-chat-selected').show();
+        $('.user-item').removeClass('active');
     });
 
     $('#darkModeBtn').click(function() {
@@ -504,6 +517,11 @@ function selectUserFromSearch(element) {
     
     $('.user-item').removeClass('active');
     
+    // Add fullscreen class for mobile/android
+    if (window.innerWidth <= 768) {
+        $('.chat-container').addClass('fullscreen');
+    }
+    
     const existingUser = $(`.user-item[data-user-id="${userId}"]`);
     
     if (existingUser.length === 0) {
@@ -557,6 +575,11 @@ function selectUser(element) {
     
     element.find('.unread-count').remove();
     
+    // Add fullscreen class for mobile/android
+    if (window.innerWidth <= 768) {
+        $('.chat-container').addClass('fullscreen');
+    }
+    
     // Enable input for all users (guest and company)
     $('#messageInput').prop('disabled', false).attr('placeholder', 'پیام خود را بنویسید...');
     $('#sendBtn').prop('disabled', false);
@@ -589,6 +612,11 @@ function selectUserFromAllUsers(element) {
     $('#deleteChatBtn').show();
     
     $('.user-item').removeClass('active');
+    
+    // Add fullscreen class for mobile/android
+    if (window.innerWidth <= 768) {
+        $('.chat-container').addClass('fullscreen');
+    }
     
     const userItem = $(`.user-item[data-user-id="${userId}"]`);
     if (userItem.length === 0) {
@@ -825,6 +853,7 @@ function addMessageToChat(message, isMine) {
 function uploadFile(file) {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('uploadPath', 'D:/ChatUploads');
     
     $.ajax({
         url: '/Chat/UploadFile',
@@ -832,20 +861,41 @@ function uploadFile(file) {
         data: formData,
         processData: false,
         contentType: false,
+        timeout: 30000,
         success: function(result) {
             if (result.success && currentUserId) {
                 $.post('/Chat/SendMessage', {
                     receiverId: currentUserId,
                     message: "📎 فایل پیوستی",
                     attachmentPath: result.path,
-                    attachmentName: result.name
+                    attachmentName: result.name,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                }, function(sendResult) {
+                    if (sendResult.success) {
+                        $('#fileInput').val('');
+                    }
+                });
+            } else if (result.success && window.currentGroupId) {
+                $.post('/GroupChat/SendGroupMessage', {
+                    groupId: window.currentGroupId,
+                    message: "📎 فایل پیوستی",
+                    attachmentPath: result.path,
+                    attachmentName: result.name,
+                    __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+                }, function(sendResult) {
+                    if (sendResult.success) {
+                        $('#fileInput').val('');
+                    }
                 });
             } else {
                 alert(result.error || 'خطا در آپلود فایل');
+                $('#fileInput').val('');
             }
         },
-        error: function() {
-            alert('خطا در آپلود فایل');
+        error: function(xhr, status, error) {
+            console.error('Upload error:', error);
+            alert('خطا در آپلود فایل: ' + (error || 'خطای نامشخص'));
+            $('#fileInput').val('');
         }
     });
 }
@@ -946,6 +996,13 @@ function scrollToBottom() {
     }
 }
 
+function scrollUsersList() {
+    const usersList = $('.users-list')[0];
+    if (usersList && window.innerWidth <= 768) {
+        usersList.scrollTop = 0;
+    }
+}
+
 function escapeHtml(text) {
     if (!text) return '';
     const map = {
@@ -1039,6 +1096,11 @@ function selectGroup(groupId) {
     $('#deleteChatBtn').hide();
     $('.user-item').removeClass('active');
     $(`.group-item[data-group-id="${groupId}"]`).addClass('active');
+    
+    // Add fullscreen class for mobile/android
+    if (window.innerWidth <= 768) {
+        $('.chat-container').addClass('fullscreen');
+    }
     
     $.get('/GroupChat/GetUserGroups', function(groups) {
         const group = groups.find(g => g.id === groupId);
