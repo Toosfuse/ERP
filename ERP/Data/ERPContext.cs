@@ -64,7 +64,7 @@ namespace ERP.Data
         public DbSet<AssestUser> AssestUsers { get; set; }
         public DbSet<AssestCategory> AssestCategories { get; set; }
         public DbSet<Asset> Assets { get; set; }
-        public DbSet<AssetProperty> AssetProperties { get; set; }
+        public DbSet<AssetItem> AssetItems { get; set; }
         public DbSet<AssetHistory> AssetHistories { get; set; }
 
 
@@ -173,144 +173,99 @@ namespace ERP.Data
 
             builder.Entity<UserGroup>().HasKey(ug => new { ug.UserID, ug.GroupID });
 
-            // ---------------- AssestUser ----------------
+            // AssestUser
             builder.Entity<AssestUser>(entity =>
             {
                 entity.HasKey(e => e.Id);
-
-                entity.Property(e => e.Name)
-                     .IsRequired()
-                     .HasMaxLength(200); 
-
-                entity.Property(e => e.Family)
-                      .IsRequired()
-                      .HasMaxLength(200);
-
-                // نوع کاربر enum ذخیره در int
-                entity.Property(e => e.AssestUserTypes)
-                      .HasConversion<int>()
-                      .IsRequired();
-
-                entity.Property(e => e.CreatedAt)
-                      .HasDefaultValueSql("GETDATE()");
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Family).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.AssestUserTypes).HasConversion<int>().IsRequired();
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETDATE()");
             });
 
-            // ---------------- AssestCategory ----------------
+            // AssestCategory
             builder.Entity<AssestCategory>(entity =>
             {
                 entity.HasKey(e => e.Id);
-
-                entity.Property(e => e.Title)
-                      .IsRequired()
-                      .HasMaxLength(150);
-
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(150);
                 entity.HasOne(e => e.Parent)
                       .WithMany(e => e.Children)
                       .HasForeignKey(e => e.ParentId)
                       .OnDelete(DeleteBehavior.Restrict);
             });
 
-            // ---------------- Asset ----------------
+            // Asset
             builder.Entity<Asset>(entity =>
             {
                 entity.HasKey(e => e.Id);
-
-                entity.Property(e => e.AssetCode)
-                      .IsRequired()
-                      .HasMaxLength(50);
-
-                entity.HasIndex(e => e.AssetCode)
-                      .IsUnique();
-
-                entity.Property(e => e.AssetName)
-                      .IsRequired()
-                      .HasMaxLength(200);
-
-                entity.Property(e => e.CreatedAt)
-                      .HasDefaultValueSql("GETDATE()");
+                entity.Property(e => e.AssetCode).IsRequired().HasMaxLength(50);
+                entity.HasIndex(e => e.AssetCode).IsUnique();
+                entity.Property(e => e.AssetName).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETDATE()");
 
                 entity.HasOne(e => e.Category)
-                      .WithMany()
+                      .WithMany(c => c.Assets)
                       .HasForeignKey(e => e.CategoryId)
                       .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasMany(e => e.Properties)
-                      .WithOne(p => p.Asset)
-                      .HasForeignKey(p => p.AssetId)
+                entity.HasOne(e => e.CurrentOwner)
+                      .WithMany(u => u.Assets)
+                      .HasForeignKey(e => e.CurrentOwnerId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasMany(e => e.Items)
+                      .WithOne(i => i.Asset)
+                      .HasForeignKey(i => i.AssetId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(e => e.Histories)
+                      .WithOne(h => h.Asset)
+                      .HasForeignKey(h => h.AssetId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // ---------------- AssetProperty ----------------
-            builder.Entity<AssetProperty>(entity =>
+            // AssetItem
+            builder.Entity<AssetItem>(entity =>
             {
                 entity.HasKey(e => e.Id);
-
-                entity.Property(e => e.PropertyName).HasMaxLength(100);
-                entity.Property(e => e.PropertyValue).HasMaxLength(200);
-                entity.Property(e => e.SerialNumber).HasMaxLength(100);
-                entity.Property(e => e.Model).HasMaxLength(100);
-                entity.Property(e => e.Brand).HasMaxLength(100);
-
-                entity.Property(e => e.CreatedAt)
-                      .HasDefaultValueSql("GETDATE()");
+                entity.Property(e => e.PartName).HasMaxLength(150);
+                entity.Property(e => e.Color).HasMaxLength(50);
+                entity.Property(e => e.Description).HasMaxLength(500);
 
                 entity.HasOne(e => e.Asset)
-                      .WithMany(a => a.Properties)
+                      .WithMany(a => a.Items)
                       .HasForeignKey(e => e.AssetId)
                       .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(e => e.Category)
-                      .WithMany()
-                      .HasForeignKey(e => e.CategoryId)
-                      .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(e => e.LastOwnerUser)
-                      .WithMany()
-                      .HasForeignKey(e => e.LastOwnerUserId)
-                      .OnDelete(DeleteBehavior.Restrict);
             });
-
-            // ---------------- AssetHistory ----------------
             builder.Entity<AssetHistory>(entity =>
             {
                 entity.HasKey(e => e.Id);
-
-                entity.Property(e => e.AssignDate)
-                      .HasDefaultValueSql("GETDATE()");
-
-                entity.Property(e => e.Description)
-                      .HasMaxLength(300);
+                entity.Property(e => e.AssignDate).HasDefaultValueSql("GETDATE()");
+                entity.Property(e => e.Description).HasMaxLength(300);
 
                 entity.HasOne(e => e.Asset)
-                      .WithMany()
+                      .WithMany(a => a.Histories)
                       .HasForeignKey(e => e.AssetId)
                       .OnDelete(DeleteBehavior.Cascade);
 
-                entity.HasOne(e => e.AssetProperty)
-                      .WithMany()
-                      .HasForeignKey(e => e.AssetPropertyId)
-                      .OnDelete(DeleteBehavior.Restrict);
-
-                entity.HasOne(e => e.AssestUser)
-                      .WithMany()
+                entity.HasOne(e => e.FromUser)
+                      .WithMany(u => u.FromHistories)
                       .HasForeignKey(e => e.FromUserId)
                       .OnDelete(DeleteBehavior.Restrict);
 
-                entity.HasOne(e => e.AssestToUser)
-                      .WithMany()
+                entity.HasOne(e => e.ToUser)
+                      .WithMany(u => u.ToHistories)
                       .HasForeignKey(e => e.ToUserId)
                       .OnDelete(DeleteBehavior.Restrict);
             });
 
-            // ---------------- ChatMessage ----------------
+            // ChatMessage
             builder.Entity<ChatMessage>(entity =>
             {
                 entity.HasKey(e => e.Id);
-
-             
             });
 
-            // ---------------- ChatAccess ----------------
+            // ChatAccess
             builder.Entity<ChatAccess>(entity =>
             {
                 entity.HasKey(e => e.Id);
@@ -328,7 +283,7 @@ namespace ERP.Data
                 entity.HasIndex(e => new { e.UserId, e.AllowedUserId }).IsUnique();
             });
 
-            // ---------------- GuestUser ----------------
+            // GuestUser
             builder.Entity<GuestUser>(entity =>
             {
                 entity.HasKey(e => e.Id);
@@ -336,14 +291,14 @@ namespace ERP.Data
                 entity.HasIndex(e => e.UniqueToken).IsUnique();
             });
 
-            // ---------------- GuestVerificationCode ----------------
+            // GuestVerificationCode
             builder.Entity<GuestVerificationCode>(entity =>
             {
                 entity.HasKey(e => e.Id);
                 entity.HasIndex(e => e.PhoneNumber);
             });
 
-            // ---------------- GuestChatAccess ----------------
+            // GuestChatAccess
             builder.Entity<GuestChatAccess>(entity =>
             {
                 entity.HasKey(e => e.Id);

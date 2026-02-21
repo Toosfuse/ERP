@@ -1,0 +1,69 @@
+        $(\"#btnRegister\").click(function () {
+            if (!$(\"#AssetCode\").val() || !$(\"#CategoryId\").val() || !$(\"#CurrentOwnerId\").val()) {
+                showAlert(\"تمام فیلدهای الزامی را پر کنید\", \"warning\");
+                return;
+            }
+
+            const payload = {
+                assetCode: $(\"#AssetCode\").val(),
+                categoryId: parseInt($(\"#CategoryId\").val()),
+                currentOwnerId: parseInt($(\"#CurrentOwnerId\").val()),
+                items: tempParts
+            };
+
+            $.ajax({
+                url: \"/Assest/Assets_CreateWithItems\",
+                type: \"POST\",
+                contentType: \"application/json\",
+                data: JSON.stringify(payload),
+                headers: { \"RequestVerificationToken\": antiForgery().__RequestVerificationToken },
+                success: function (response) {
+                    if (response.success) {
+                        showAlert(response.message);
+                        clearForm();
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('addModal'));
+                        if (modal) modal.hide();
+                        grid.dataSource.read();
+                    } else {
+                        showAlert(response.message, \"danger\");
+                    }
+                },
+                error: function (xhr) {
+                    showAlert(\"خطا در ثبت: \" + (xhr.responseJSON?.message || xhr.statusText), \"danger\");
+                }
+            });
+        });
+
+        $(\"#saveEditBtn\").click(function () {
+            let id = parseInt($(\"#editId\").val());
+            let item = grid.dataSource.get(id);
+            if (!item) {
+                showAlert(\"رکورد یافت نشد\", \"danger\");
+                return;
+            }
+            item.set(\"AssetCode\", $(\"#editAssetCode\").val());
+            item.set(\"CategoryId\", parseInt($(\"#editCategoryId\").val()));
+            item.set(\"CurrentOwnerId\", parseInt($(\"#editCurrentOwnerId\").val()));
+            item.set(\"IsActive\", $(\"#editIsActive\").is(\":checked\"));
+            
+            if (editTempParts.length > 0) {
+                const assetId = id;
+                editTempParts.forEach(part => {
+                    $.ajax({
+                        url: \"/Assest/AssetItems_Create\",
+                        type: \"POST\",
+                        data: {
+                            assetId: assetId,
+                            partName: part.partName,
+                            color: part.color,
+                            description: part.description,
+                            __RequestVerificationToken: antiForgery().__RequestVerificationToken
+                        }
+                    });
+                });
+            }
+            
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editModal'));
+            if (modal) modal.hide();
+            grid.dataSource.sync();
+        });

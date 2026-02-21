@@ -4,6 +4,7 @@ using ERP.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ERP.Migrations
 {
     [DbContext(typeof(ERPContext))]
-    partial class ERPContextModelSnapshot : ModelSnapshot
+    [Migration("20260221072444_AddParentIdToAsset")]
+    partial class AddParentIdToAsset
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2396,6 +2399,9 @@ namespace ERP.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<int?>("ParentId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AssetCode")
@@ -2404,6 +2410,8 @@ namespace ERP.Migrations
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("CurrentOwnerId");
+
+                    b.HasIndex("ParentId");
 
                     b.ToTable("Assets");
                 });
@@ -2444,39 +2452,6 @@ namespace ERP.Migrations
                     b.HasIndex("ToUserId");
 
                     b.ToTable("AssetHistories");
-                });
-
-            modelBuilder.Entity("ERP.Models.asset.AssetItem", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AssetId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Color")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("PartName")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssetId");
-
-                    b.ToTable("AssetItems");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -2762,9 +2737,15 @@ namespace ERP.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("ERP.Models.asset.Asset", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentId");
+
                     b.Navigation("Category");
 
                     b.Navigation("CurrentOwner");
+
+                    b.Navigation("Parent");
                 });
 
             modelBuilder.Entity("ERP.Models.asset.AssetHistory", b =>
@@ -2792,17 +2773,6 @@ namespace ERP.Migrations
                     b.Navigation("FromUser");
 
                     b.Navigation("ToUser");
-                });
-
-            modelBuilder.Entity("ERP.Models.asset.AssetItem", b =>
-                {
-                    b.HasOne("ERP.Models.asset.Asset", "Asset")
-                        .WithMany("Items")
-                        .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Asset");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -2910,9 +2880,9 @@ namespace ERP.Migrations
 
             modelBuilder.Entity("ERP.Models.asset.Asset", b =>
                 {
-                    b.Navigation("Histories");
+                    b.Navigation("Children");
 
-                    b.Navigation("Items");
+                    b.Navigation("Histories");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,0 +1,64 @@
+        function loadItemsGrid(assetId) {
+            $("#itemsGrid").empty();
+            $("#itemsGrid").html(`
+                <table id="itemsGrid_table" class="table table-sm">
+                    <thead><tr><th>نام قطعه</th><th>رنگ</th><th>شرح</th><th>عملیات</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            `);
+            
+            $.ajax({
+                url: "/Assest/AssetItems_Read",
+                type: "GET",
+                data: { assetId: assetId },
+                success: function (response) {
+                    let tbody = $("#itemsGrid_table tbody");
+                    tbody.empty();
+                    let items = response.Data || [];
+                    if (items.length > 0) {
+                        items.forEach(item => {
+                            tbody.append(`<tr><td>${item.PartName}</td><td>${item.Color || '-'}</td><td>${item.Description || '-'}</td><td><button class="btn btn-sm btn-warning" onclick="editExistingItem(${item.Id}, '${item.PartName}', '${item.Color}', '${item.Description}')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="deleteItem(${item.Id})"><i class="fas fa-trash"></i></button></td></tr>`);
+                        });
+                    } else {
+                        tbody.append('<tr><td colspan="4" class="text-center text-muted">هنوز قطعهای اضافه نشده است</td></tr>');
+                    }
+                }
+            });
+        }
+
+        function editExistingItem(itemId, partName, color, description) {
+            $("#editPartName").val(partName);
+            $("#editPartColor").val(color);
+            $("#editPartDescription").val(description);
+            
+            $.ajax({
+                url: "/Assest/AssetItems_Destroy",
+                type: "POST",
+                data: {
+                    model: { Id: itemId },
+                    __RequestVerificationToken: antiForgery().__RequestVerificationToken
+                },
+                success: function () {
+                    let assetId = parseInt($("#editId").val());
+                    loadItemsGrid(assetId);
+                }
+            });
+        }
+
+        function deleteItem(itemId) {
+            if (confirm("آیا مطمئن هستید؟")) {
+                $.ajax({
+                    url: "/Assest/AssetItems_Destroy",
+                    type: "POST",
+                    data: {
+                        model: { Id: itemId },
+                        __RequestVerificationToken: antiForgery().__RequestVerificationToken
+                    },
+                    success: function () {
+                        showAlert("حذف با موفقیت انجام شد");
+                        let assetId = parseInt($("#editId").val());
+                        loadItemsGrid(assetId);
+                    }
+                });
+            }
+        }

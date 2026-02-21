@@ -1,0 +1,10 @@
+        public async Task<IActionResult> GetAssetCode(int assetId)
+        {
+            var asset = await _context.Assets
+                .AsNoTracking()
+                .Where(x => x.Id == assetId)
+                .Select(x => x.AssetCode)
+                .FirstOrDefaultAsync();
+
+            return Json(new { assetCode = asset ?? "" });
+        }

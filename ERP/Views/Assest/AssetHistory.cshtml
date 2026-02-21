@@ -1,0 +1,210 @@
+@model int?
+@using Kendo.Mvc.UI
+
+@{
+    ViewData["Title"] = "تاریخچه تحویل اموال";
+}
+
+<div class="container-fluid mt-5" dir="rtl">
+    @Html.AntiForgeryToken()
+
+    <div id="alertContainer" class="mb-4"></div>
+
+    <div class="card shadow-lg border-0" style="border-radius: 20px; overflow: hidden;">
+        <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem;">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="mb-0 font-weight-bold">
+                        <i class="fas fa-exchange-alt me-2"></i>
+                        تاریخچه تحویل اموال
+                    </h3>
+                    <small class="text-white-50">مشاهده و مدیریت تحویل اموال بین کاربران</small>
+                </div>
+                <i class="fas fa-history" style="font-size: 3rem; opacity: 0.3;"></i>
+            </div>
+        </div>
+
+        <div class="card-body p-4">
+            <div class="mb-3">
+                <a href="/Assest/RegisterAsset" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>بازگشت به اموال
+                </a>
+            </div>
+
+          
+
+            @(Html.Kendo().Grid<ERP.ViewModels.AssestViewModel.AssetHistoryViewModel>()
+                .Name("assetHistoryGrid")
+                .Columns(columns =>
+                {
+                    columns.Bound(c => c.AssetCode)
+                        .Title("کد اموال")
+                        .Width("12%")
+                        .HtmlAttributes(new { style = "text-align:center;" })
+                        .HeaderHtmlAttributes(new { style = "text-align:center; background: #f8f9fa;" });
+
+                    columns.Bound(c => c.AssetName)
+                        .Title("نام اموال")
+                        .Width("18%")
+                        .HtmlAttributes(new { style = "text-align:center;" })
+                        .HeaderHtmlAttributes(new { style = "text-align:center; background: #f8f9fa;" });
+
+                    columns.Bound(c => c.FromUserName)
+                        .Title("از کاربر")
+                        .Width("12%")
+                        .HtmlAttributes(new { style = "text-align:center;" })
+                        .HeaderHtmlAttributes(new { style = "text-align:center; background: #f8f9fa;" });
+
+                    columns.Bound(c => c.ToUserName)
+                        .Title("به کاربر")
+                        .Width("12%")
+                        .HtmlAttributes(new { style = "text-align:center;" })
+                        .HeaderHtmlAttributes(new { style = "text-align:center; background: #f8f9fa;" });
+
+                    columns.Bound(c => c.AssignDate)
+                        .Title("تاریخ تحویل")
+                        .Width("12%")
+                        .HtmlAttributes(new { style = "text-align:center;" })
+                        .HeaderHtmlAttributes(new { style = "text-align:center; background: #f8f9fa;" });
+
+                    columns.Bound(c => c.Description)
+                        .Title("توضیحات")
+                        .Width("18%")
+                        .HtmlAttributes(new { style = "text-align:center; font-size: 0.9rem;" })
+                        .HeaderHtmlAttributes(new { style = "text-align:center; background: #f8f9fa;" });
+
+                   
+                })
+                .ToolBar(toolbar =>
+                {
+                    toolbar.Search();
+                })
+                .Sortable()
+                .Filterable()
+                .Pageable()
+                .Scrollable()
+                .DataSource(ds => ds
+                    .Ajax()
+                    .Read(r => r.Action("AssetHistory_Read", "Assest").Data("getAssetCodeData"))
+                    .Create(c => c.Action("AssetHistory_Create", "Assest").Data("antiForgery"))
+                    .Destroy(d => d.Action("AssetHistory_Destroy", "Assest").Data("antiForgery"))
+                    .Model(m =>
+                    {
+                        m.Id(f => f.Id);
+                        m.Field(f => f.Id).Editable(false);
+                        m.Field(f => f.AssetCode).Editable(false);
+                        m.Field(f => f.AssetName).Editable(false);
+                        m.Field(f => f.FromUserName).Editable(false);
+                        m.Field(f => f.ToUserName).Editable(false);
+                        m.Field(f => f.AssignDate).Editable(false);
+                    })
+               
+                )
+            )
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function antiForgery() {
+            return {
+                __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val()
+            };
+        }
+
+        function showAlert(msg, type = 'success') {
+            $("#alertContainer").html(`
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert" style="border-radius: 10px; border-left: 4px solid;">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                    ${msg}
+                    <button type="button" class="close" data-dismiss="alert"></button>
+                </div>
+            `);
+            setTimeout(() => {
+                $("#alertContainer .alert").alert('close');
+            }, 4000);
+        }
+
+        let grid;
+
+        $(document).ready(function () {
+            grid = $("#assetHistoryGrid").data("kendoGrid");
+
+            loadAssets();
+            loadUsers();
+
+            grid.dataSource.bind("requestEnd", function (e) {
+                if (e.type === "create") {
+                    showAlert("تحویل با موفقیت ثبت شد", "success");
+                    clearForm();
+                    grid.dataSource.read();
+                }
+                if (e.type === "destroy") {
+                    showAlert("تحویل با موفقیت حذف شد", "success");
+                }
+            });
+        });
+
+        function loadAssets() {
+            $.getJSON("/Assest/GetAssets", function (data) {
+                $("#AssetId").empty().append('<option value="">-- انتخاب اموال --</option>');
+                $.each(data, function (i, item) {
+                    $("#AssetId").append(
+                        $("<option>").val(item.id).text(item.title)
+                    );
+                });
+            });
+        }
+
+        function loadUsers() {
+            $.getJSON("/Assest/GetUsers", function (data) {
+                $("#FromUserId, #ToUserId").empty().append('<option value="">-- انتخاب کاربر --</option>');
+                $.each(data, function (i, item) {
+                    $("#FromUserId, #ToUserId").append(
+                        $("<option>").val(item.id).text(item.title)
+                    );
+                });
+            });
+        }
+
+        $("#btnRegister").click(function () {
+            if (!$("#AssetId").val() || !$("#FromUserId").val() || !$("#ToUserId").val()) {
+                showAlert("لطفا تمام فیلدهای الزامی را پر کنید", "warning");
+                return;
+            }
+
+            if ($("#FromUserId").val() === $("#ToUserId").val()) {
+                showAlert("کاربر مبدا و مقصد نمیتوانند یکی باشند", "warning");
+                return;
+            }
+
+            grid.dataSource.add({
+                AssetId: parseInt($("#AssetId").val()),
+                FromUserId: parseInt($("#FromUserId").val()),
+                ToUserId: parseInt($("#ToUserId").val()),
+                Description: ""
+            });
+
+            grid.dataSource.sync();
+        });
+
+        function clearForm() {
+            $("#AssetId").val("");
+            $("#FromUserId").val("");
+            $("#ToUserId").val("");
+        }
+
+        function getAssetCodeData() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const assetCode = urlParams.get('assetCode');
+            return assetCode ? { assetCode: assetCode } : {};
+        }
+
+        function getAssetCode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const assetCode = urlParams.get('assetCode');
+            return assetCode ? { assetCode: assetCode } : {};
+        }
+    </script>
+}

@@ -1,0 +1,21 @@
+        $(document).ready(function () {
+            grid = $("#assetGrid").data("kendoGrid");
+            loadCategories();
+            loadUsers();
+            grid.dataSource.read();
+
+            grid.dataSource.bind("requestEnd", function (e) {
+                if (e.type === "create") {
+                    showAlert("ثبت با موفقیت انجام شد");
+                    clearForm();
+                    bootstrap.Modal.getInstance(document.getElementById('addModal'))?.hide();
+                    grid.dataSource.read();
+                }
+                if (e.type === "update") {
+                    showAlert("ویرایش با موفقیت انجام شد");
+                    bootstrap.Modal.getInstance(document.getElementById('editModal'))?.hide();
+                    grid.dataSource.read();
+                }
+                if (e.type === "destroy") showAlert("حذف با موفقیت انجام شد");
+            });
+        });

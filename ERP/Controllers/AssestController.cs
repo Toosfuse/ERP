@@ -7,6 +7,7 @@ using Kendo.Mvc.Extensions;
 using Kendo.Mvc.UI;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -64,7 +65,7 @@ namespace ERP.Controllers
 
             if (exists)
             {
-                ModelState.AddModelError("", "??? ???? ????? ??? ??? ???");
+                ModelState.AddModelError("", "این کاربر قبلا ثبت شده است");
                 return Json(new[] { model }.ToDataSourceResult(request, ModelState));
             }
 
@@ -101,7 +102,6 @@ namespace ERP.Controllers
                 entity.Family = model.Family.Trim();
                 entity.AssestUserTypes = model.AssestUserTypes;
                 entity.IsActive = model.IsActive;
-                entity.CreatedAt = DateTime.Now;
                 await _context.SaveChangesAsync();
             }
             model.CreatedAt = _services.iGregorianToPersianDateTime(entity.CreatedAt);
@@ -191,7 +191,7 @@ namespace ERP.Controllers
             var entity = await _context.AssestCategories.FindAsync(model.Id);
             if (entity == null)
             {
-                ModelState.AddModelError("", "????????? ???? ???");
+                ModelState.AddModelError("", "دستهبندی یافت نشد");
                 return Json(new[] { model }.ToDataSourceResult(request, ModelState));
             }
 
@@ -245,7 +245,7 @@ namespace ERP.Controllers
         {
             var data = await _context.AssestCategories
                 .AsNoTracking()
-                .Select(x => new { id = x.Id, title = x.Title ?? "???? ?????" })
+                .Select(x => new { id = x.Id, title = x.Title ?? "بدون نام" })
                 .OrderBy(x => x.title)
                 .ToListAsync();
 
@@ -254,26 +254,67 @@ namespace ERP.Controllers
         #endregion
 
         #region Asset
-        public IActionResult RegisterAssest()
+        public IActionResult RegisterAsset()
+        {
+            return RedirectToAction("AssetManagement");
+        }
+
+        public IActionResult AssetManagement()
         {
             return View();
         }
 
-        public async Task<IActionResult> Assets_Read([DataSourceRequest] DataSourceRequest request)
+        public async Task<IActionResult> Assets_Read([DataSourceRequest] DataSourceRequest request, bool showDeleted = false)
         {
-            var data = await _context.Assets
-                .Include(a => a.Category)
-                .OrderByDescending(a => a.Id)
-                .Select(a => new AssetViewModel
+            var histories = await _context.AssetHistories
+                .AsNoTracking()
+                .Include(h => h.ToUser)
+                .GroupBy(h => h.AssetId)
+                .Select(g => new { AssetId = g.Key, Latest = g.OrderByDescending(h => h.AssignDate).FirstOrDefault() })
+                .ToListAsync();
+
+            var query = _context.Assets.AsNoTracking();
+            
+            if (showDeleted)
+                query = query.Where(x => x.IsDeleted);
+            else
+                query = query.Where(x => !x.IsDeleted);
+
+            var data = await query
+                .Include(x => x.Category)
+                .Include(x => x.CurrentOwner)
+                .OrderByDescending(x => x.Id)
+                .Select(x => new AssetViewModel
                 {
-                    Id = a.Id,
-                    AssetCode = a.AssetCode,
-                    AssetName = a.AssetName,
-                    CategoryId = a.CategoryId,
-                    CategoryTitle = a.Category.Title,
-                    IsActive = a.IsActive,
-                    CreatedAt = a.CreatedAt.ToString("yyyy/MM/dd HH:mm")
-                }).ToListAsync();
+                    Id = x.Id,
+                    AssetCode = x.AssetCode ?? "",
+                    AssetName = x.AssetName ?? "",
+                    CategoryId = x.CategoryId,
+                    CategoryTitle = x.Category != null ? x.Category.Title : "",
+                    CurrentOwnerId = x.CurrentOwnerId,
+                    CurrentOwnerName = x.CurrentOwner != null ? x.CurrentOwner.Name + " " + x.CurrentOwner.Family : "",
+                    IsActive = x.IsActive,
+                    IsDeleted = x.IsDeleted,
+                    CreatedAt = _services.iGregorianToPersianDateTime(x.CreatedAt),
+                    LastModifiedDate = "",
+                    LastModifiedBy = ""
+                })
+                .ToListAsync();
+
+            foreach (var item in data)
+            {
+                var history = histories.FirstOrDefault(h => h.AssetId == item.Id)?.Latest;
+                if (history != null)
+                {
+                    item.LastModifiedDate = _services.iGregorianToPersianDateTime(history.AssignDate);
+                    item.LastModifiedBy = history.ToUser != null ? history.ToUser.Name + " " + history.ToUser.Family : "";
+                }
+                else
+                {
+                    item.LastModifiedDate = item.CreatedAt;
+                    item.LastModifiedBy = "";
+                }
+            }
 
             return Json(data.ToDataSourceResult(request));
         }
@@ -282,53 +323,144 @@ namespace ERP.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Assets_Create([DataSourceRequest] DataSourceRequest request, AssetViewModel model)
         {
+            ModelState.Remove("CategoryTitle");
+            ModelState.Remove("CurrentOwnerName");
+            ModelState.Remove("CreatedAt");
+            ModelState.Remove("LastModifiedDate");
+            ModelState.Remove("AssetName");
+
             if (!ModelState.IsValid)
                 return Json(new[] { model }.ToDataSourceResult(request, ModelState));
 
-            var exists = await _context.Assets.AnyAsync(x => x.AssetCode == model.AssetCode);
-            if (exists)
-            {
-                ModelState.AddModelError("AssetCode", "??? ?? ????? ????? ??? ??? ???");
-                return Json(new[] { model }.ToDataSourceResult(request, ModelState));
-            }
-
             var entity = new Asset
             {
-                AssetCode = model.AssetCode?.Trim(),
-                AssetName = model.AssetName?.Trim(),
+                AssetCode = model.AssetCode?.Trim() ?? "",
+                AssetName = model.AssetName?.Trim() ?? "",
                 CategoryId = model.CategoryId,
-                IsActive = model.IsActive,
+                CurrentOwnerId = model.CurrentOwnerId,
+                IsActive = true,
                 CreatedAt = DateTime.Now
             };
+
             _context.Assets.Add(entity);
             await _context.SaveChangesAsync();
 
+            var category = await _context.AssestCategories.FindAsync(model.CategoryId);
+            var owner = await _context.AssestUsers.FindAsync(model.CurrentOwnerId);
+
             model.Id = entity.Id;
-            model.CreatedAt = entity.CreatedAt.ToString("yyyy/MM/dd HH:mm");
-            model.CategoryTitle = (await _context.AssestCategories.FindAsync(entity.CategoryId))?.Title;
+            model.AssetName = entity.AssetName;
+            model.CategoryTitle = category?.Title;
+            model.CurrentOwnerName = owner?.Name + " " + owner?.Family;
+            model.IsActive = entity.IsActive;
+            model.CreatedAt = _services.iGregorianToPersianDateTime(entity.CreatedAt);
+            model.LastModifiedDate = _services.iGregorianToPersianDateTime(entity.CreatedAt);
+            model.LastModifiedBy = "";
 
             return Json(new[] { model }.ToDataSourceResult(request));
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Assets_CreateWithItems([FromBody] JObject data)
+        {
+            try
+            {
+                var assetCode = data["assetCode"]?.ToString();
+                var assetName = data["assetName"]?.ToString();
+                var categoryId = data["categoryId"]?.Value<int>() ?? 0;
+                var currentOwnerId = data["currentOwnerId"]?.Value<int>() ?? 0;
+                var items = data["items"] as JArray;
+
+                if (string.IsNullOrWhiteSpace(assetCode))
+                    return Json(new { success = false, message = "کد اموال الزامی است" });
+
+                var asset = new Asset
+                {
+                    AssetCode = assetCode.Trim(),
+                    AssetName = assetName.Trim(),
+                    CategoryId = categoryId,
+                    CurrentOwnerId = currentOwnerId,
+                    IsActive = true,
+                    CreatedAt = DateTime.Now
+                };
+
+                _context.Assets.Add(asset);
+                await _context.SaveChangesAsync();
+
+                if (items != null && items.Count > 0)
+                {
+                    foreach (var item in items)
+                    {
+                        var assetItem = new AssetItem
+                        {
+                            AssetId = asset.Id,
+                            PartName = item["partName"]?.ToString()?.Trim() ?? "",
+                            Color = item["color"]?.ToString()?.Trim() ?? "",
+                            Description = item["description"]?.ToString()?.Trim() ?? ""
+                        };
+                        _context.AssetItems.Add(assetItem);
+                    }
+                    await _context.SaveChangesAsync();
+                }
+
+                return Json(new { success = true, id = asset.Id, message = "ثبت با موفقیت انجام شد" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.InnerException?.Message ?? ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Assets_Update([DataSourceRequest] DataSourceRequest request, AssetViewModel model)
         {
+            ModelState.Remove("CategoryTitle");
+            ModelState.Remove("CurrentOwnerName");
+            ModelState.Remove("CreatedAt");
+            ModelState.Remove("LastModifiedDate");
+            ModelState.Remove("LastModifiedBy");
+
             if (!ModelState.IsValid)
                 return Json(new[] { model }.ToDataSourceResult(request, ModelState));
 
             var entity = await _context.Assets.FindAsync(model.Id);
             if (entity == null)
+            {
+                ModelState.AddModelError("", "اموال یافت نشد");
                 return Json(new[] { model }.ToDataSourceResult(request, ModelState));
+            }
 
-            entity.AssetCode = model.AssetCode?.Trim();
-            entity.AssetName = model.AssetName?.Trim();
+            int oldOwnerId = entity.CurrentOwnerId;
+            entity.AssetCode = model.AssetCode.Trim();
+            entity.AssetName = model.AssetName.Trim();
             entity.CategoryId = model.CategoryId;
+            entity.CurrentOwnerId = model.CurrentOwnerId;
+          
             entity.IsActive = model.IsActive;
+
+            if (oldOwnerId != model.CurrentOwnerId)
+            {
+                var history = new AssetHistory
+                {
+                    AssetId = model.Id,
+                    FromUserId = oldOwnerId,
+                    ToUserId = model.CurrentOwnerId,
+                    AssignDate = DateTime.Now,
+                    Description = "تغییر مالک از طریق ویرایش اموال"
+                };
+                _context.AssetHistories.Add(history);
+            }
+
             await _context.SaveChangesAsync();
 
-            model.CreatedAt = entity.CreatedAt.ToString("yyyy/MM/dd HH:mm");
-            model.CategoryTitle = (await _context.AssestCategories.FindAsync(entity.CategoryId))?.Title;
+            var category = await _context.AssestCategories.FindAsync(model.CategoryId);
+            var owner = await _context.AssestUsers.FindAsync(model.CurrentOwnerId);
+
+            model.CategoryTitle = category?.Title;
+            model.CurrentOwnerName = owner?.Name + " " + owner?.Family;
+            model.CreatedAt = _services.iGregorianToPersianDateTime(entity.CreatedAt);
 
             return Json(new[] { model }.ToDataSourceResult(request));
         }
@@ -340,9 +472,139 @@ namespace ERP.Controllers
             var entity = await _context.Assets.FindAsync(model.Id);
             if (entity != null)
             {
-                _context.Assets.Remove(entity);
+                entity.IsDeleted = true;
                 await _context.SaveChangesAsync();
             }
+
+            return Json(new[] { model }.ToDataSourceResult(request));
+        }
+
+        public async Task<IActionResult> GetCategories()
+        {
+            var data = await _context.AssestCategories
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .Select(x => new { id = x.Id, title = x.Title })
+                .OrderBy(x => x.title)
+                .ToListAsync();
+
+            return Json(data);
+        }
+
+        public async Task<IActionResult> GetUsers()
+        {
+            var data = await _context.AssestUsers
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .Select(x => new { id = x.Id, title = x.Name + " " + x.Family })
+                .OrderBy(x => x.title)
+                .ToListAsync();
+
+            return Json(data);
+        }
+        #endregion
+
+        #region AssetHistory
+        public IActionResult AssetHistory(int? assetId)
+        {
+            return View(assetId);
+        }
+
+        public async Task<IActionResult> GetAssetCode(int assetId)
+        {
+            var asset = await _context.Assets
+                .AsNoTracking()
+                .Where(x => x.Id == assetId)
+                .Select(x => x.AssetCode)
+                .FirstOrDefaultAsync();
+
+            return Json(new { assetCode = asset ?? "" });
+        }
+
+        public async Task<IActionResult> AssetHistory_Read([DataSourceRequest] DataSourceRequest request, string assetCode)
+        {
+            assetCode = assetCode?.Trim();
+            var query = _context.AssetHistories.AsNoTracking();
+
+            if (!string.IsNullOrEmpty(assetCode))
+            {
+                var assetIds = await _context.Assets
+                    .Where(x => x.AssetCode.Trim() == assetCode)
+                    .Select(x => x.Id)
+                    .ToListAsync();
+
+                if (assetIds.Any())
+                {
+                    query = query.Where(x => assetIds.Contains(x.AssetId));
+                }
+            }
+
+            var data = await query
+                .Include(x => x.Asset)
+                .Include(x => x.FromUser)
+                .Include(x => x.ToUser)
+                .OrderByDescending(x => x.Id)
+                .Select(x => new AssetHistoryViewModel
+                {
+                    Id = x.Id,
+                    AssetId = x.AssetId,
+                    AssetCode = x.Asset.AssetCode,
+                    AssetName = x.Asset.AssetName,
+                    FromUserId = x.FromUserId,
+                    FromUserName = x.FromUser.Name + " " + x.FromUser.Family,
+                    ToUserId = x.ToUserId,
+                    ToUserName = x.ToUser.Name + " " + x.ToUser.Family,
+                    AssignDate = _services.iGregorianToPersianDateTime(x.AssignDate),
+                    Description = x.Description
+                })
+                .ToListAsync();
+
+            return Json(data.ToDataSourceResult(request));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AssetHistory_Create([DataSourceRequest] DataSourceRequest request, AssetHistoryViewModel model)
+        {
+            ModelState.Remove("AssetCode");
+            ModelState.Remove("AssetName");
+            ModelState.Remove("FromUserName");
+            ModelState.Remove("ToUserName");
+            ModelState.Remove("AssignDate");
+
+            if (!ModelState.IsValid)
+                return Json(new[] { model }.ToDataSourceResult(request, ModelState));
+
+            var asset = await _context.Assets.FindAsync(model.AssetId);
+            if (asset == null)
+            {
+                ModelState.AddModelError("", "اموال یافت نشد");
+                return Json(new[] { model }.ToDataSourceResult(request, ModelState));
+            }
+
+            var history = new AssetHistory
+            {
+                AssetId = model.AssetId,
+                FromUserId = model.FromUserId,
+                ToUserId = model.ToUserId,
+                AssignDate = DateTime.Now,
+                Description = model.Description?.Trim()
+            };
+
+            _context.AssetHistories.Add(history);
+            asset.CurrentOwnerId = model.ToUserId;
+            await _context.SaveChangesAsync();
+
+            var fromUser = await _context.AssestUsers.FindAsync(model.FromUserId);
+            var toUser = await _context.AssestUsers.FindAsync(model.ToUserId);
+
+            model.Id = history.Id;
+            model.AssetCode = asset.AssetCode;
+            model.AssetName = asset.AssetName;
+            model.FromUserName = fromUser?.Name + " " + fromUser?.Family;
+            model.ToUserName = toUser?.Name + " " + toUser?.Family;
+            model.AssignDate = _services.iGregorianToPersianDateTime(history.AssignDate);
+
             return Json(new[] { model }.ToDataSourceResult(request));
         }
 
@@ -350,237 +612,17 @@ namespace ERP.Controllers
         {
             var data = await _context.Assets
                 .AsNoTracking()
-                .Select(x => new { id = x.Id, name = x.AssetName })
+                .Where(x => x.IsActive && !x.IsDeleted)
+                .Select(x => new { id = x.Id, title = x.AssetCode + " - " + x.AssetName })
+                .OrderBy(x => x.title)
                 .ToListAsync();
+
             return Json(data);
         }
 
-        public async Task<IActionResult> GetCategories()
-        {
-            var data = await _context.AssestCategories
-                .AsNoTracking()
-                .Select(x => new { id = x.Id, name = x.Title })
-                .ToListAsync();
-            return Json(data);
-        }
-
-        public async Task<IActionResult> GetAssetUsers()
-        {
-            var data = await _context.AssestUsers
-                .AsNoTracking()
-                .Where(x => x.IsActive)
-                .Select(x => new { id = x.Id, name = $"{x.Name} {x.Family}" })
-                .ToListAsync();
-            return Json(data);
-        }
-
-        public async Task<IActionResult> GetAssetsForAssignment()
-        {
-            var data = await _context.Assets
-                .AsNoTracking()
-                .Where(x => x.IsActive)
-                .Select(x => new { id = x.Id, name = x.AssetName, code = x.AssetCode })
-                .ToListAsync();
-            return Json(data);
-        }
-
-        public async Task<IActionResult> GetAssetPropertiesForAssignment(int assetId)
-        {
-            var data = await _context.AssetProperties
-                .AsNoTracking()
-                .Where(x => x.AssetId == assetId && x.IsActive)
-                .Select(x => new 
-                { 
-                    id = x.Id, 
-                    name = x.PropertyName, 
-                    serialNumber = x.SerialNumber,
-                    model = x.Model,
-                    brand = x.Brand,
-                    value = x.PropertyValue
-                })
-                .ToListAsync();
-            return Json(data);
-        }
-        #endregion
-
-        #region AssetProperty
-        public IActionResult RegisterAssetProperty()
-        {
-            return View();
-        }
-
-        public async Task<IActionResult> AssetProperties_Read([DataSourceRequest] DataSourceRequest request)
-        {
-            var data = await _context.AssetProperties
-                .Include(ap => ap.Asset)
-                .Include(ap => ap.LastOwnerUser)
-                .OrderByDescending(ap => ap.Id)
-                .Select(ap => new AssetPropertyViewModel
-                {
-                    Id = ap.Id,
-                    AssetId = ap.AssetId,
-                    AssetName = ap.Asset.AssetName,
-                    PropertyName = ap.PropertyName,
-                    PropertyValue = ap.PropertyValue,
-                    SerialNumber = ap.SerialNumber,
-                    Model = ap.Model,
-                    Brand = ap.Brand,
-                    IsActive = ap.IsActive,
-                    CreatedAt = ap.CreatedAt.ToString("yyyy/MM/dd HH:mm"),
-                    LastOwnerUserId = ap.LastOwnerUserId,
-                    LastOwnerUserName = ap.LastOwnerUser != null ? $"{ap.LastOwnerUser.Name} {ap.LastOwnerUser.Family}" : ""
-                }).ToListAsync();
-
-            return Json(data.ToDataSourceResult(request));
-        }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AssetProperties_Create([DataSourceRequest] DataSourceRequest request, AssetPropertyViewModel model)
-        {
-            if (!ModelState.IsValid)
-                return Json(new[] { model }.ToDataSourceResult(request, ModelState));
-
-            var entity = new AssetProperty
-            {
-                AssetId = model.AssetId,
-                CategoryId = model.AssetId,
-                PropertyName = model.PropertyName?.Trim(),
-                PropertyValue = model.PropertyValue?.Trim(),
-                SerialNumber = model.SerialNumber?.Trim(),
-                Model = model.Model?.Trim(),
-                Brand = model.Brand?.Trim(),
-                IsActive = model.IsActive,
-                CreatedAt = DateTime.Now,
-                LastOwnerUserId = model.LastOwnerUserId
-            };
-            _context.AssetProperties.Add(entity);
-            await _context.SaveChangesAsync();
-
-            model.Id = entity.Id;
-            model.CreatedAt = entity.CreatedAt.ToString("yyyy/MM/dd HH:mm");
-
-            return Json(new[] { model }.ToDataSourceResult(request));
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AssetProperties_Update([DataSourceRequest] DataSourceRequest request, AssetPropertyViewModel model)
-        {
-            if (!ModelState.IsValid)
-                return Json(new[] { model }.ToDataSourceResult(request, ModelState));
-
-            var entity = await _context.AssetProperties.FindAsync(model.Id);
-            if (entity == null)
-                return Json(new[] { model }.ToDataSourceResult(request, ModelState));
-
-            entity.PropertyName = model.PropertyName?.Trim();
-            entity.PropertyValue = model.PropertyValue?.Trim();
-            entity.SerialNumber = model.SerialNumber?.Trim();
-            entity.Model = model.Model?.Trim();
-            entity.Brand = model.Brand?.Trim();
-            entity.IsActive = model.IsActive;
-            entity.LastOwnerUserId = model.LastOwnerUserId;
-            await _context.SaveChangesAsync();
-
-            model.CreatedAt = entity.CreatedAt.ToString("yyyy/MM/dd HH:mm");
-
-            return Json(new[] { model }.ToDataSourceResult(request));
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AssetProperties_Destroy([DataSourceRequest] DataSourceRequest request, AssetPropertyViewModel model)
-        {
-            var entity = await _context.AssetProperties.FindAsync(model.Id);
-            if (entity != null)
-            {
-                _context.AssetProperties.Remove(entity);
-                await _context.SaveChangesAsync();
-            }
-            return Json(new[] { model }.ToDataSourceResult(request));
-        }
-        #endregion
-
-        #region AssetHistory
-        public IActionResult RegisterAssetHistory()
-        {
-            return View();
-        }
-
-        public async Task<IActionResult> AssetHistories_Read([DataSourceRequest] DataSourceRequest request)
-        {
-            var data = await _context.AssetHistories
-                .Include(ah => ah.Asset)
-                .Include(ah => ah.AssetProperty)
-                .Include(ah => ah.AssestUser)
-                .Include(ah => ah.AssestToUser)
-                .OrderByDescending(ah => ah.Id)
-                .Select(ah => new AssetHistoryViewModel
-                {
-                    Id = ah.Id,
-                    AssetId = ah.AssetId,
-                    AssetName = ah.Asset.AssetName,
-                    AssetPropertyId = ah.AssetPropertyId,
-                    PropertyName = ah.AssetProperty != null ? ah.AssetProperty.PropertyName : "",
-                    FromUser = $"{ah.AssestUser.Name} {ah.AssestUser.Family}",
-                    ToUser = $"{ah.AssestToUser.Name} {ah.AssestToUser.Family}",
-                    AssignDate = ah.AssignDate.ToString("yyyy/MM/dd HH:mm"),
-                    Description = ah.Description
-                }).ToListAsync();
-
-            return Json(data.ToDataSourceResult(request));
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AssetHistories_Create([DataSourceRequest] DataSourceRequest request, AssetHistoryViewModel model)
-        {
-            if (!ModelState.IsValid)
-                return Json(new[] { model }.ToDataSourceResult(request, ModelState));
-
-            var entity = new AssetHistory
-            {
-                AssetId = model.AssetId,
-                AssetPropertyId = model.AssetPropertyId,
-                FromUserId = int.Parse(model.FromUser.Split()[0]),
-                ToUserId = int.Parse(model.ToUser.Split()[0]),
-                AssignDate = DateTime.Now,
-                Description = model.Description?.Trim()
-            };
-            _context.AssetHistories.Add(entity);
-            await _context.SaveChangesAsync();
-
-            model.Id = entity.Id;
-            model.AssignDate = entity.AssignDate.ToString("yyyy/MM/dd HH:mm");
-
-            return Json(new[] { model }.ToDataSourceResult(request));
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AssetHistories_Update([DataSourceRequest] DataSourceRequest request, AssetHistoryViewModel model)
-        {
-            if (!ModelState.IsValid)
-                return Json(new[] { model }.ToDataSourceResult(request, ModelState));
-
-            var entity = await _context.AssetHistories.FindAsync(model.Id);
-            if (entity == null)
-                return Json(new[] { model }.ToDataSourceResult(request, ModelState));
-
-            entity.AssetId = model.AssetId;
-            entity.AssetPropertyId = model.AssetPropertyId;
-            entity.Description = model.Description?.Trim();
-            await _context.SaveChangesAsync();
-
-            model.AssignDate = entity.AssignDate.ToString("yyyy/MM/dd HH:mm");
-
-            return Json(new[] { model }.ToDataSourceResult(request));
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AssetHistories_Destroy([DataSourceRequest] DataSourceRequest request, AssetHistoryViewModel model)
+        public async Task<IActionResult> AssetHistory_Destroy([DataSourceRequest] DataSourceRequest request, AssetHistoryViewModel model)
         {
             var entity = await _context.AssetHistories.FindAsync(model.Id);
             if (entity != null)
@@ -588,6 +630,147 @@ namespace ERP.Controllers
                 _context.AssetHistories.Remove(entity);
                 await _context.SaveChangesAsync();
             }
+            return Json(new[] { model }.ToDataSourceResult(request));
+        }
+
+        #region AssetItem
+        public async Task<IActionResult> AssetItems_Read([DataSourceRequest] DataSourceRequest request, int assetId)
+        {
+            var data = await _context.AssetItems
+                .AsNoTracking()
+                .Where(x => x.AssetId == assetId)
+                .Select(x => new AssetItemViewModel
+                {
+                    Id = x.Id,
+                    AssetId = x.AssetId,
+                    PartName = x.PartName,
+                    Color = x.Color,
+                    Description = x.Description
+                })
+                .ToListAsync();
+
+            return Json(data.ToDataSourceResult(request));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AssetItems_Create([FromForm] int assetId, [FromForm] string partName, [FromForm] string color, [FromForm] string description)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(partName))
+                    return Json(new { success = false, message = "نام قطعه الزامی است" });
+
+                if (assetId <= 0)
+                    return Json(new { success = false, message = "AssetId باید بزرگتر از 0 باشد" });
+
+                var asset = await _context.Assets.FindAsync(assetId);
+                if (asset == null)
+                    return Json(new { success = false, message = $"اموال با ID {assetId} وجود ندارد" });
+
+                var entity = new AssetItem
+                {
+                    AssetId = assetId,
+                    PartName = partName?.Trim() ?? "",
+                    Color = color?.Trim() ?? "",
+                    Description = description?.Trim() ?? ""
+                };
+
+                _context.AssetItems.Add(entity);
+                await _context.SaveChangesAsync();
+
+                return Json(new { success = true, id = entity.Id });
+            }
+            catch (Exception ex)
+            {
+                var innerEx = ex.InnerException?.Message ?? ex.Message;
+                return Json(new { success = false, message = innerEx });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AssetItems_Update([DataSourceRequest] DataSourceRequest request, AssetItemViewModel model)
+        {
+            if (!ModelState.IsValid)
+                return Json(new[] { model }.ToDataSourceResult(request, ModelState));
+
+            var entity = await _context.AssetItems.FindAsync(model.Id);
+            if (entity != null)
+            {
+                entity.PartName = model.PartName?.Trim();
+                entity.Color = model.Color?.Trim();
+                entity.Description = model.Description?.Trim();
+                await _context.SaveChangesAsync();
+            }
+
+            return Json(new[] { model }.ToDataSourceResult(request));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> AssetItems_Destroy([DataSourceRequest] DataSourceRequest request, AssetItemViewModel model)
+        {
+            var entity = await _context.AssetItems.FindAsync(model.Id);
+            if (entity != null)
+            {
+                _context.AssetItems.Remove(entity);
+                await _context.SaveChangesAsync();
+            }
+
+            return Json(new[] { model }.ToDataSourceResult(request));
+        }
+        #endregion
+
+        public async Task<IActionResult> GetParentAssets()
+        {
+            var data = await _context.Assets
+                .AsNoTracking()
+                .Where(x => x.IsActive && !x.IsDeleted)
+                .Select(x => new { id = x.Id, title = x.AssetCode + " - " + x.AssetName })
+                .OrderBy(x => x.title)
+                .ToListAsync();
+
+            return Json(data);
+        }
+      
+
+        public async Task<IActionResult> DeletedAssets_Read([DataSourceRequest] DataSourceRequest request)
+        {
+            var data = await _context.Assets
+                .AsNoTracking()
+                .Where(x => x.IsDeleted)
+                .Include(x => x.Category)
+                .Include(x => x.CurrentOwner)
+                .OrderByDescending(x => x.Id)
+                .Select(x => new AssetViewModel
+                {
+                    Id = x.Id,
+                    AssetCode = x.AssetCode,
+                    AssetName = x.AssetName,
+                    CategoryId = x.CategoryId,
+                    CategoryTitle = x.Category.Title,
+                    CurrentOwnerId = x.CurrentOwnerId,
+                    CurrentOwnerName = x.CurrentOwner.Name + " " + x.CurrentOwner.Family,
+                    IsActive = x.IsActive,
+                    CreatedAt = _services.iGregorianToPersianDateTime(x.CreatedAt)
+                })
+                .ToListAsync();
+
+            return Json(data.ToDataSourceResult(request));
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeletedAssets_Restore([DataSourceRequest] DataSourceRequest request, AssetViewModel model)
+        {
+            var entity = await _context.Assets.FindAsync(model.Id);
+            if (entity != null)
+            {
+                entity.IsDeleted = false;
+                await _context.SaveChangesAsync();
+            }
+
             return Json(new[] { model }.ToDataSourceResult(request));
         }
         #endregion

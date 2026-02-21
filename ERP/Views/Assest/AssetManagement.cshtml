@@ -1,0 +1,601 @@
+@using Kendo.Mvc.UI
+
+@{
+    ViewData["Title"] = "مدیریت اموال";
+}
+
+<div class="container-fluid mt-5" dir="rtl">
+    @Html.AntiForgeryToken()
+
+    <div id="alertContainer" class="mb-2"></div>
+
+    <div class="card shadow-lg border-0" style="border-radius: 20px; overflow: hidden;">
+        <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem;">
+            <h3 class="mb-0 fw-bold">
+                <i class="fas fa-box me-2"></i>مدیریت اموال
+            </h3>
+        </div>
+
+        <div class="card-body p-4">
+            <div class="mb-3 d-flex align-items-center gap-3">
+                <button type="button" id="btnAddAsset" class="btn btn-primary">
+                    <i class="fas fa-plus me-2"></i>ثبت اموال جدید
+                </button>
+                <div class="custom-control custom-checkbox">
+                    <input type="checkbox" class="custom-control-input" id="showDeleted">
+                    <label class="custom-control-label" for="showDeleted">نمایش حذف شده ها</label>
+                </div>
+            </div>
+
+            @(Html.Kendo().Grid<ERP.ViewModels.AssestViewModel.AssetViewModel>()
+                .Name("assetGrid")
+                .Columns(columns =>
+                {
+                    columns.Bound(c => c.AssetCode).Title("کد").Width("10%").HtmlAttributes(new { style = "text-align:center;" });
+                            columns.Bound(c => c.AssetName).Title("نام اموال").Width("15%").HtmlAttributes(new { style = "text-align:center;" });
+                    columns.Bound(c => c.CategoryTitle).Title("دسته بندی").Width("12%").HtmlAttributes(new { style = "text-align:center;" });
+                    columns.Bound(c => c.CurrentOwnerName).Title("مالک").Width("15%").HtmlAttributes(new { style = "text-align:center;" });
+                    columns.Bound(c => c.LastModifiedDate).Title("تاریخ تحویل").Width("12%").HtmlAttributes(new { style = "text-align:center;" }).ClientTemplate("#= LastModifiedDate ? kendo.toString(new Date(LastModifiedDate), 'yyyy/MM/dd HH:mm') : '-' #");
+                    columns.Bound(c => c.IsActive).Title("وضعیت").Width("8%").HtmlAttributes(new { style = "text-align:center;" }).ClientTemplate("#= IsActive ? 'فعال' : 'غیر فعال' #");
+                    columns.Command(cmd =>
+                    {
+                        cmd.Custom("ویرایش").Click("openEditModal").HtmlAttributes(new { @class = "btn-sm btn-primary" }).Visible("isEditVisible");
+                        cmd.Custom("حذف").Click("deleteAsset").HtmlAttributes(new { @class = "btn-sm btn-danger" }).Visible("isDeleteVisible");
+                        cmd.Custom("تاریخچه").Click("showHistory").HtmlAttributes(new { @class = "btn-sm btn-info" });
+                    })
+                    .Title("عملیات").Width("20%").HtmlAttributes(new { style = "text-align:center;" });
+                })
+                .ToolBar(toolbar => toolbar.Search())
+                .Sortable()
+                .Filterable()
+                .Pageable()
+                .Scrollable()
+                .DataSource(ds => ds
+                    .Ajax()
+                    .Read(r => r.Action("Assets_Read", "Assest").Data("getShowDeletedData"))
+                    .Create(c => c.Action("Assets_Create", "Assest").Data("antiForgery"))
+                    .Update(u => u.Action("Assets_Update", "Assest").Data("antiForgery"))
+                    .Destroy(d => d.Action("Assets_Destroy", "Assest").Data("antiForgery"))
+                    .Model(m =>
+                    {
+                        m.Id(f => f.Id);
+                        m.Field(f => f.Id).Editable(false);
+                        m.Field(f => f.CategoryTitle).Editable(false);
+                        m.Field(f => f.CurrentOwnerName).Editable(false);
+                        m.Field(f => f.LastModifiedDate).Editable(false);
+                    })
+                )
+            )
+        </div>
+    </div>
+</div>
+
+<!-- مودال ثبت اموال جدید -->
+<div class="modal fade" id="addModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h5 class="modal-title text-white font-weight-bold">ثبت اموال جدید</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="border p-3 mb-4" style="border-radius: 10px; border-left: 4px solid #667eea;">
+                    <h6 class="font-weight-bold mb-3"><i class="fas fa-box me-2" style="color: #667eea;"></i>معلومات اموال</h6>
+                    <div class="row">
+                        <div class="mb-3 col-md-6">
+                        <label class="form-label font-weight-bold">کد اموال</label>
+                        <input type="text" id="AssetCode" class="form-control" />
+                    </div>
+                        <div class="mb-3 col-md-6">
+                        <label class="form-label font-weight-bold">نام اموال</label>
+                        <input type="text" id="AssetName" class="form-control" />
+                    </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label font-weight-bold">دسته بندی</label>
+                            <select id="CategoryId" class="form-control"></select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label font-weight-bold">مالک</label>
+                            <select id="CurrentOwnerId" class="form-control"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border p-3" style="border-radius: 10px; border-left: 4px solid #764ba2;">
+                    <h6 class="font-weight-bold mb-3"><i class="fas fa-puzzle-piece me-2" style="color: #764ba2;"></i>قطعات اموال</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label font-weight-bold">نام قطعه</label>
+                            <input type="text" id="PartName" class="form-control" />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label font-weight-bold">رنگ</label>
+                            <input type="text" id="PartColor" class="form-control" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <label class="form-label font-weight-bold">شرح</label>
+                            <textarea id="PartDescription" class="form-control" rows="2"></textarea>
+                            
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" id="addPartBtn" class="btn w-100" style="background: #764ba2; color: white;">
+                            <i class="fas fa-plus me-1"></i>افزودن
+                        </button>
+                    </div>
+                    <div id="partsListContainer"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-dismiss="modal">انصراف</button>
+                <button id="btnRegister" class="btn btn-primary">ثبت</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- مودال ویرایش -->
+<div class="modal fade" id="editModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h5 class="modal-title text-white font-weight-bold">ویرایش اموال</h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="editId" />
+
+                <div class="border p-3 mb-4" style="border-radius: 10px; border-left: 4px solid #667eea;">
+                    <h6 class="font-weight-bold mb-3"><i class="fas fa-box me-2" style="color: #667eea;"></i>معلومات اموال</h6>
+                    <div class="mb-3">
+                        <label class="form-label font-weight-bold">کد اموال</label>
+                        <input type="text" id="editAssetCode" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label font-weight-bold">نام اموال</label>
+                        <input type="text" id="editAssetName" class="form-control" />
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label font-weight-bold">دسته بندی</label>
+                            <select id="editCategoryId" class="form-control"></select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label font-weight-bold">مالک</label>
+                            <select id="editCurrentOwnerId" class="form-control"></select>
+                        </div>
+                    </div>
+                    <div class="custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input" id="editIsActive">
+                        <label class="custom-control-label font-weight-bold" for="editIsActive">فعال</label>
+                    </div>
+                </div>
+
+                <div class="border p-3" style="border-radius: 10px; border-left: 4px solid #764ba2;">
+                    <h6 class="font-weight-bold mb-3"><i class="fas fa-puzzle-piece me-2" style="color: #764ba2;"></i>قطعات اموال</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label font-weight-bold">نام قطعه</label>
+                            <input type="text" id="editPartName" class="form-control" />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label font-weight-bold">رنگ</label>
+                            <input type="text" id="editPartColor" class="form-control" />
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <label class="form-label font-weight-bold">شرح</label>
+                            <textarea id="editPartDescription" class="form-control" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" id="editAddPartBtn" class="btn w-100" style="background: #764ba2; color: white;">
+                            <i class="fas fa-plus me-1"></i>افزودن
+                        </button>
+                       
+                    </div>
+                    <div id="itemsGrid"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-dismiss="modal">انصراف</button>
+                <button id="saveEditBtn" class="btn btn-primary">ذخیره</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let grid;
+        let tempParts = [];
+        let editTempParts = [];
+
+        function antiForgery() {
+            return { __RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() };
+        }
+
+        function showAlert(msg, type = 'success') {
+            $("#alertContainer").html(`
+                <div class="alert alert-${type} alert-dismissible fade show">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                    ${msg}
+                    <button type="button" class="close" data-dismiss="alert"></button>
+                </div>
+            `);
+            setTimeout(() => $("#alertContainer .alert").alert('close'), 4000);
+        }
+
+        $(document).ready(function () {
+            grid = $("#assetGrid").data("kendoGrid");
+            loadCategories();
+            loadUsers();
+            
+            const savedShowDeleted = localStorage.getItem("showDeleted") === "true";
+            $("#showDeleted").prop("checked", savedShowDeleted);
+            
+            grid.dataSource.read();
+
+            grid.dataSource.bind("requestEnd", function (e) {
+                if (e.type === "create") {
+                    showAlert("ثبت با موفقیت انجام شد");
+                    clearForm();
+                    $("#addModal").modal("hide");
+                    grid.dataSource.read();
+                }
+                if (e.type === "update") {
+                    showAlert("ویرایش با موفقیت انجام شد");
+                    $("#editModal").modal("hide");
+                }
+                if (e.type === "destroy") showAlert("حذف با موفقیت انجام شد");
+            });
+        });
+
+        function loadCategories() {
+            $.getJSON("/Assest/GetCategories", function (data) {
+                $("#CategoryId, #editCategoryId").empty();
+                $.each(data, function (i, item) {
+                    $("#CategoryId, #editCategoryId").append($("<option>").val(item.id).text(item.title));
+                });
+            });
+        }
+
+        function loadUsers() {
+            $.getJSON("/Assest/GetUsers", function (data) {
+                $("#CurrentOwnerId, #editCurrentOwnerId").empty();
+                $.each(data, function (i, item) {
+                    $("#CurrentOwnerId, #editCurrentOwnerId").append($("<option>").val(item.id).text(item.title));
+                });
+            });
+        }
+
+        $("#btnAddAsset").click(function () {
+            tempParts = [];
+            $("#AssetCode, #AssetName, #PartName, #PartColor, #PartDescription").val("");
+            $("#CategoryId, #CurrentOwnerId").val("");
+            renderPartsList();
+            $("#addModal").modal("show");
+        });
+
+        function renderPartsList() {
+            if (tempParts.length === 0) {
+                $("#partsListContainer").html('<p class="text-muted">هنوز قطعهای اضافه نشده است</p>');
+                return;
+            }
+
+            let html = '<table class="table table-sm"><thead><tr><th>نام قطعه</th><th>رنگ</th><th>شرح</th><th>عملیات</th></tr></thead><tbody>';
+            tempParts.forEach((part, idx) => {
+                html += `<tr>
+                    <td>${part.partName}</td>
+                    <td>${part.color || '-'}</td>
+                    <td>${part.description || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" onclick="editPart(${idx})"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-danger" onclick="deletePart(${idx})"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            $("#partsListContainer").html(html);
+        }
+
+        function renderEditPartsList() {
+            let html = '<table class="table table-sm"><thead><tr><th>نام قطعه</th><th>رنگ</th><th>شرح</th><th>عملیات</th></tr></thead><tbody>';
+            
+            let items = $("#itemsGrid_table tbody tr");
+            items.each(function() {
+                let cells = $(this).find('td');
+                if (cells.length > 0 && !$(this).find('td').eq(0).text().includes('هنوز')) {
+                    html += `<tr>${$(this).html()}</tr>`;
+                }
+            });
+
+            editTempParts.forEach((part, idx) => {
+                html += `<tr>
+                    <td>${part.partName}</td>
+                    <td>${part.color || '-'}</td>
+                    <td>${part.description || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" onclick="editEditPart(${idx})"><i class="fas fa-edit"></i></button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteEditPart(${idx})"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            $("#itemsGrid").html(html);
+        }
+
+        $("#addPartBtn").click(function () {
+            if (!$("#PartName").val()) {
+                showAlert("نام قطعه الزامی است", "warning");
+                return;
+            }
+            tempParts.push({
+                partName: $("#PartName").val(),
+                color: $("#PartColor").val(),
+                description: $("#PartDescription").val()
+            });
+            $("#PartName, #PartColor, #PartDescription").val("");
+            renderPartsList();
+        });
+
+        $("#editAddPartBtn").click(function () {
+            if (!$("#editPartName").val()) {
+                showAlert("نام قطعه الزامی است", "warning");
+                return;
+            }
+            editTempParts.push({
+                partName: $("#editPartName").val(),
+                color: $("#editPartColor").val(),
+                description: $("#editPartDescription").val()
+            });
+            $("#editPartName, #editPartColor, #editPartDescription").val("");
+            renderEditPartsList();
+        });
+
+        function deletePart(idx) {
+            tempParts.splice(idx, 1);
+            renderPartsList();
+        }
+
+        function deleteEditPart(idx) {
+            editTempParts.splice(idx, 1);
+            renderEditPartsList();
+        }
+
+        function editPart(idx) {
+            if (idx < 0 || idx >= tempParts.length) return;
+            let part = tempParts[idx];
+            $("#PartName").val(part.partName);
+            $("#PartColor").val(part.color || "");
+            $("#PartDescription").val(part.description || "");
+            tempParts.splice(idx, 1);
+            renderPartsList();
+        }
+
+        function editEditPart(idx) {
+            if (idx < 0 || idx >= editTempParts.length) return;
+            let part = editTempParts[idx];
+            $("#editPartName").val(part.partName);
+            $("#editPartColor").val(part.color || "");
+            $("#editPartDescription").val(part.description || "");
+            editTempParts.splice(idx, 1);
+            renderEditPartsList();
+        }
+
+        $("#btnRegister").click(function () {
+            if (!$("#AssetCode").val() || !$("#AssetName").val() || !$("#CategoryId").val() || !$("#CurrentOwnerId").val()) {
+                showAlert("تمام فیلدهای الزامی را پر کنید", "warning");
+                return;
+            }
+
+            const payload = {
+                assetCode: $("#AssetCode").val(),
+                assetName: $("#AssetName").val(),
+                categoryId: parseInt($("#CategoryId").val()),
+                currentOwnerId: parseInt($("#CurrentOwnerId").val()),
+                items: tempParts
+            };
+
+            $.ajax({
+                url: "/Assest/Assets_CreateWithItems",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify(payload),
+                headers: { "RequestVerificationToken": antiForgery().__RequestVerificationToken },
+                success: function (response) {
+                    if (response.success) {
+                        showAlert(response.message);
+                        clearForm();
+                        $("#addModal").modal("hide");
+                        grid.dataSource.read();
+                    } else {
+                        showAlert(response.message, "danger");
+                    }
+                },
+                error: function (xhr) {
+                    showAlert("خطا در ثبت: " + (xhr.responseJSON?.message || xhr.statusText), "danger");
+                }
+            });
+        });
+
+        function openEditModal(e) {
+            e.preventDefault();
+            let item = grid.dataItem($(e.currentTarget).closest("tr"));
+            if (!item) {
+                showAlert("خطا در دریافت اطلاعات", "danger");
+                return;
+            }
+            editTempParts = [];
+            $("#editId").val(item.Id);
+            $("#editAssetCode").val(item.AssetCode);
+            $("#editAssetName").val(item.AssetName);
+            $("#editCategoryId").val(item.CategoryId);
+            $("#editCurrentOwnerId").val(item.CurrentOwnerId);
+            $("#editIsActive").prop("checked", item.IsActive);
+
+            loadItemsGrid(item.Id);
+            $("#editModal").modal("show");
+        }
+
+        function loadItemsGrid(assetId) {
+            $("#itemsGrid").empty();
+            $("#itemsGrid").html(`
+                <table id="itemsGrid_table" class="table table-sm">
+                    <thead><tr><th>نام قطعه</th><th>رنگ</th><th>شرح</th><th>عملیات</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            `);
+            
+            $.ajax({
+                url: "/Assest/AssetItems_Read",
+                type: "GET",
+                data: { assetId: assetId },
+                success: function (response) {
+                    let tbody = $("#itemsGrid_table tbody");
+                    tbody.empty();
+                    let items = response.Data || [];
+                    if (items.length > 0) {
+                        items.forEach(item => {
+                            tbody.append(`<tr><td>${item.PartName}</td><td>${item.Color || '-'}</td><td>${item.Description || '-'}</td><td><button class="btn btn-sm btn-warning" onclick="editExistingItem(${item.Id}, '${item.PartName}', '${item.Color}', '${item.Description}')"><i class="fas fa-edit"></i></button><button class="btn btn-sm btn-danger" onclick="deleteItem(${item.Id})"><i class="fas fa-trash"></i></button></td></tr>`);
+                        });
+                    } else {
+                        tbody.append('<tr><td colspan="4" class="text-center text-muted">هنوز قطعهای اضافه نشده است</td></tr>');
+                    }
+                }
+            });
+        }
+
+        function editExistingItem(itemId, partName, color, description) {
+            $("#editPartName").val(partName);
+            $("#editPartColor").val(color);
+            $("#editPartDescription").val(description);
+            
+            $.ajax({
+                url: "/Assest/AssetItems_Destroy",
+                type: "POST",
+                data: {
+                    model: { Id: itemId },
+                    __RequestVerificationToken: antiForgery().__RequestVerificationToken
+                },
+                success: function () {
+                    let assetId = parseInt($("#editId").val());
+                    loadItemsGrid(assetId);
+                }
+            });
+        }
+
+        function deleteItem(itemId) {
+            if (confirm("آیا مطمئن هستید؟")) {
+                $.ajax({
+                    url: "/Assest/AssetItems_Destroy",
+                    type: "POST",
+                    data: {
+                        model: { Id: itemId },
+                        __RequestVerificationToken: antiForgery().__RequestVerificationToken
+                    },
+                    success: function () {
+                        showAlert("حذف با موفقیت انجام شد");
+                        let assetId = parseInt($("#editId").val());
+                        loadItemsGrid(assetId);
+                    }
+                });
+            }
+        }
+
+        function clearForm() {
+            $("#AssetCode, #AssetName, #PartName, #PartColor, #PartDescription").val("");
+            $("#CategoryId, #CurrentOwnerId").val("");
+            tempParts = [];
+        }
+
+        function getShowDeletedData() {
+            return { showDeleted: $("#showDeleted").is(":checked") };
+        }
+
+        function isEditVisible(dataItem) {
+            return !dataItem.IsDeleted;
+        }
+
+        function isDeleteVisible(dataItem) {
+            return !dataItem.IsDeleted;
+        }
+
+        $("#showDeleted").change(function () {
+            localStorage.setItem("showDeleted", $(this).is(":checked"));
+            grid.dataSource.read();
+        });
+
+        $("#saveEditBtn").click(function () {
+            if (!$("#editAssetCode").val() || !$("#editAssetName").val() || !$("#editCategoryId").val() || !$("#editCurrentOwnerId").val()) {
+                showAlert("تمام فیلدهای الزامی را پر کنید", "warning");
+                return;
+            }
+            let id = parseInt($("#editId").val());
+            let item = grid.dataSource.get(id);
+            if (!item) {
+                showAlert("رکورد یافت نشد", "danger");
+                return;
+            }
+            item.set("AssetCode", $("#editAssetCode").val());
+            item.set("AssetName", $("#editAssetName").val());
+            item.set("CategoryId", parseInt($("#editCategoryId").val()));
+            item.set("CurrentOwnerId", parseInt($("#editCurrentOwnerId").val()));
+            item.set("IsActive", $("#editIsActive").is(":checked"));
+            
+            if (editTempParts.length > 0) {
+                const assetId = id;
+                editTempParts.forEach(part => {
+                    $.ajax({
+                        url: "/Assest/AssetItems_Create",
+                        type: "POST",
+                        data: {
+                            assetId: assetId,
+                            partName: part.partName,
+                            color: part.color,
+                            description: part.description,
+                            __RequestVerificationToken: antiForgery().__RequestVerificationToken
+                        }
+                    });
+                });
+            }
+            
+            $("#editModal").modal("hide");
+            grid.dataSource.sync();
+        });
+
+        function showHistory(e) {
+            e.preventDefault();
+            let item = grid.dataItem($(e.currentTarget).closest("tr"));
+            if (!item) return;
+            window.location.href = "/Assest/AssetHistory?assetCode=" + item.AssetCode;
+        }
+
+        function deleteAsset(e) {
+            e.preventDefault();
+            let item = grid.dataItem($(e.currentTarget).closest("tr"));
+            if (!item || item.IsDeleted) {
+                showAlert("فقط اموال فعال قابل حذف هستند", "warning");
+                return;
+            }
+            if (confirm("آیا مطمئن هستید؟")) {
+                grid.dataSource.remove(item);
+            }
+        }
+
+        grid.dataSource.bind("requestStart", function(e) {
+            if (e.type === "destroy") {
+                let item = e.data;
+                if (item && item.IsDeleted) {
+                    e.preventDefault();
+                    showAlert("فقط اموال فعال قابل حذف هستند", "warning");
+                }
+            }
+        });
+    </script>
+}
