@@ -1,0 +1,378 @@
+@{
+    ViewData["Title"] = "مدیریت مسیرهای سرویس";
+}
+
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">تعریف مسیر جدید</h5>
+                </div>
+                <div class="card-body">
+                    <form id="routeForm">
+                        @Html.AntiForgeryToken()
+                        <div class="form-group">
+                            <label for="name">نام مسیر</label>
+                            <input type="text" class="form-control" id="name" name="name" placeholder="مثال: وکیل آباد">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="vehicleType">نوع وسیله</label>
+                            <select class="form-control" id="vehicleType" name="vehicleType">
+                                <option value="">-- انتخاب کنید --</option>
+                                <option value="خودرو">خودرو</option>
+                                <option value="مینی بوس">مینی بوس</option>
+                                <option value="اتوبوس">اتوبوس</option>
+                                <option value="ون">ون</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="startTime">ساعت شروع</label>
+                            <input type="time" class="form-control" id="startTime" name="startTime">
+                        </div>
+
+                        <hr>
+                        <h6 class="mb-3">ایستگاهها</h6>
+
+                        <div id="stopsList" class="mb-3"></div>
+
+                        <div class="form-group">
+                            <label for="stopName">نام ایستگاه</label>
+                            <input type="text" class="form-control" id="stopName" placeholder="مثال: انبار مرکزی">
+                        </div>
+
+                        <button type="button" class="btn btn-info btn-sm btn-block mb-3" onclick="addStop()">
+                            <i class="fas fa-plus"></i> افزودن ایستگاه
+                        </button>
+
+                        <button type="submit" class="btn btn-primary btn-block">
+                            <i class="fas fa-save"></i> ثبت مسیر
+                        </button>
+                    </form>
+
+                    <div id="progressContainer" style="display: none;" class="mt-3">
+                        <div class="progress">
+                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <small class="text-muted">در حال ثبت...</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">لیست مسیرها و ایستگاهها</h5>
+                </div>
+                <div class="card-body">
+                    <div id="routesContainer"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script>
+        let tempStops = [];
+
+        $(document).ready(function() {
+            loadRoutes();
+            setupForm();
+        });
+
+        function addStop() {
+            const name = $('#stopName').val().trim();
+
+            if (!name) {
+                showAlert('نام ایستگاه الزامی است', 'warning');
+                return;
+            }
+
+            tempStops.push({
+                sequence: tempStops.length + 1,
+                name: name,
+                address: ''
+            });
+
+            renderTempStops();
+            $('#stopName').val('');
+            $('#stopName').focus();
+        }
+
+        function renderTempStops() {
+            let html = '';
+            tempStops.forEach((stop, index) => {
+                html += `
+                    <div class="alert alert-light border-left-info mb-2">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <strong>${stop.sequence}. ${stop.name}</strong>
+                            </div>
+                            <div class="col-auto">
+                                <button type="button" class="btn btn-sm btn-danger" onclick="removeStop(${index})">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            $('#stopsList').html(html || '<p class="text-muted small">هیچ ایستگاهی اضافه نشده است</p>');
+        }
+
+        function removeStop(index) {
+            tempStops.splice(index, 1);
+            tempStops.forEach((stop, i) => stop.sequence = i + 1);
+            renderTempStops();
+        }
+
+        function loadRoutes() {
+            $.get('/ServiceRoute/Routes_Read', function(response) {
+                const routes = response.data || response || [];
+                if (Array.isArray(routes) && routes.length > 0) {
+                    renderRoutes(routes);
+                } else {
+                    $('#routesContainer').html('');
+                }
+            });
+        }
+
+        function renderRoutes(routes) {
+            let html = '';
+            
+            routes.forEach(route => {
+                const vehicleType = route.VehicleType || 'نامشخص';
+                const startTime = route.StartTime || '--:--';
+                const routeId = route.Id;
+                html += `
+                    <div class="card mb-3 border-left-primary">
+                        <div class="card-header bg-light">
+                            <div class="row align-items-center">
+                                <div class="col">
+                                    <h6 class="mb-0">
+                                        <strong>${route.Name}</strong>
+                                        <span class="badge badge-info ml-2">${vehicleType}</span>
+                                        <span class="badge badge-secondary ml-2">شروع: ${startTime}</span>
+                                    </h6>
+                                </div>
+                                <div class="col-auto">
+                                    <button class="btn btn-sm btn-warning" onclick="editRoute(${routeId})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteRoute(${routeId})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-body p-0">
+                            <div id="stops-${routeId}" class="stops-list"></div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            $('#routesContainer').html(html || '<p class="text-muted">هیچ مسیری ثبت نشده است</p>');
+            
+            routes.forEach(route => {
+                loadStops(route.Id);
+            });
+        }
+
+        function loadStops(routeId) {
+            $.get('/ServiceRoute/Stops_Read?routeId=' + routeId, function(response) {
+                const stops = response.data || response || [];
+                renderStops(routeId, Array.isArray(stops) ? stops : []);
+            });
+        }
+
+        function renderStops(routeId, stops) {
+            let html = '';
+            
+            if (stops.length > 0) {
+                html = '<ul class="list-group list-group-flush">';
+                stops.forEach((stop, index) => {
+                    html += `
+                        <li class="list-group-item">
+                            <div class="row align-items-center">
+                                <div class="col-auto">
+                                    <span class="badge badge-pill badge-primary">${stop.sequence}</span>
+                                </div>
+                                <div class="col">
+                                    <strong>${stop.name}</strong>
+                                </div>
+                                <div class="col-auto">
+                                    <button class="btn btn-sm btn-danger" onclick="deleteStop(${stop.id}, ${routeId})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </li>
+                    `;
+                });
+                html += '</ul>';
+            }
+            
+            $('#stops-' + routeId).html(html);
+        }
+
+        function deleteStop(stopId, routeId) {
+            if (confirm('آیا مطمئن هستید؟')) {
+                $.post('/ServiceRoute/Stops_Destroy', { id: stopId }, function() {
+                    loadStops(routeId);
+                    showAlert('ایستگاه حذف شد', 'success');
+                });
+            }
+        }
+
+        function deleteRoute(routeId) {
+            if (confirm('آیا مطمئن هستید؟')) {
+                $.post('/ServiceRoute/Routes_Destroy', { id: routeId }, function() {
+                    loadRoutes();
+                    showAlert('مسیر حذف شد', 'success');
+                });
+            }
+        }
+
+        function setupForm() {
+            $('#routeForm').on('submit', function(e) {
+                e.preventDefault();
+
+                const name = $('#name').val().trim();
+                const vehicleType = $('#vehicleType').val().trim();
+                const startTime = $('#startTime').val().trim();
+
+                if (!name || !vehicleType || !startTime) {
+                    showAlert('نام مسیر، نوع وسیله و ساعت شروع الزامی هستند', 'warning');
+                    return;
+                }
+
+                if (tempStops.length === 0) {
+                    showAlert('حداقل یک ایستگاه اضافه کنید', 'warning');
+                    return;
+                }
+
+                showProgress();
+
+                $.ajax({
+                    url: '/ServiceRoute/CreateRouteWithStops',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        name: name,
+                        vehicleType: vehicleType,
+                        startTime: startTime,
+                        stops: tempStops
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            hideProgress();
+                            tempStops = [];
+                            $('#routeForm')[0].reset();
+                            renderTempStops();
+                            loadRoutes();
+                            showAlert('مسیر و ایستگاهها با موفقیت ثبت شدند', 'success');
+                        } else {
+                            hideProgress();
+                            showAlert(response.message || 'خطا در ثبت', 'danger');
+                        }
+                    },
+                    error: function(xhr) {
+                        hideProgress();
+                        showAlert('خطا در ثبت', 'danger');
+                    }
+                });
+            });
+        }
+
+        function showProgress() {
+            $('#progressContainer').show();
+            let progress = 0;
+            const interval = setInterval(function() {
+                progress += Math.random() * 30;
+                if (progress > 90) progress = 90;
+                $('#progressBar').css('width', progress + '%');
+            }, 200);
+
+            setTimeout(function() {
+                clearInterval(interval);
+                $('#progressBar').css('width', '100%');
+            }, 1500);
+        }
+
+        function hideProgress() {
+            setTimeout(function() {
+                $('#progressContainer').fadeOut(300);
+                $('#progressBar').css('width', '0%');
+            }, 500);
+        }
+
+        function showAlert(message, type) {
+            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="close" data-dismiss="alert">
+                        <span>&times;</span>
+                    </button>
+                </div>
+            `;
+            
+            const $alert = $(alertHtml);
+            $('#routeForm').before($alert);
+            
+            setTimeout(function() {
+                $alert.fadeOut(300, function() { $(this).remove(); });
+            }, 3000);
+        }
+    </script>
+
+    <style>
+        .card {
+            border: none;
+            border-radius: 8px;
+        }
+        .card-header {
+            border-radius: 8px 8px 0 0;
+            padding: 1rem;
+        }
+        .border-left-primary {
+            border-left: 4px solid #007bff !important;
+        }
+        .border-left-info {
+            border-left: 3px solid #17a2b8 !important;
+        }
+        .form-control {
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .form-control:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        .btn {
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .progress {
+            height: 25px;
+            border-radius: 4px;
+        }
+        .list-group-item {
+            border-left: 3px solid #e3e6f0;
+            padding: 1rem;
+        }
+        .list-group-item:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+}

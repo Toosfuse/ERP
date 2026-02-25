@@ -205,7 +205,16 @@
                     </ul>
                 </li>
             }
-
+            @if (User.IsInRole("SuperAdmin") || User.IsInRole("Management") || User.IsInRole("Guard") || User.IsInRole("Edari"))
+            {
+                <li class="treeview">
+                    <a class="app-menu__item" href="#" data-toggle="treeview"><i class="app-menu__icon fa fa-address-card-o"></i><span class="app-menu__label">انتظامات</span><i class="treeview-indicator fa fa-angle-left"></i></a>
+                    <ul class="treeview-menu">
+                        <li><a class="treeview-item" href="/ServiceRoute/Index"><i class="icon fa fa-list-ol"></i> تعریف سرویس ها</a></li>
+                        <li><a class="treeview-item" href="/ServiceRoute/Calendar"><i class="icon fa fa-list-ol"></i> ثبت ورود و خروج</a></li>
+                    </ul>
+                </li>
+            }
             @if (User.IsInRole("SuperAdmin"))
             {
                 <li class="treeview">
@@ -543,16 +552,7 @@
                     </ul>
                 </li>
             }
-            @if (User.IsInRole("SuperAdmin") || User.IsInRole("Management") || User.IsInRole("Guard") || User.IsInRole("Edari"))
-            {
-                <li class="treeview">
-                    <a class="app-menu__item" href="#" data-toggle="treeview"><i class="app-menu__icon fa fa-address-card-o"></i><span class="app-menu__label">انتظامات</span><i class="treeview-indicator fa fa-angle-left"></i></a>
-                    <ul class="treeview-menu">
-                        <li><a class="treeview-item" href="/GuardInOuts/Index"><i class="icon fa fa-list-ol"></i> ورود و خروج مهمانان / کالا</a></li>
-                        <li><a class="treeview-item" href="/GuardPersonInOuts/Index"><i class="icon fa fa-list-ol"></i> ورود و خروج پرسنل</a></li>
-                    </ul>
-                </li>
-            }
+           
         </ul>
     </aside>
     <main class="app-content">

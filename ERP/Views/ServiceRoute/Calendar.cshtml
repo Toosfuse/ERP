@@ -1,0 +1,161 @@
+@{
+    ViewData["Title"] = "تقویم مسیرهای سرویس";
+}
+
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5>تقویم اردیبهشت</h5>
+                </div>
+                <div class="card-body">
+                    <div id="calendar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5>مسیرهای <span id="selectedDate">امروز</span></h5>
+                </div>
+                <div class="card-body">
+                    <div id="logsGrid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        let selectedDate = new Date();
+
+        $(document).ready(function() {
+            initCalendar();
+            loadLogs(selectedDate);
+        });
+
+        function initCalendar() {
+            const year = 1403;
+            const month = 1;
+            const daysInMonth = 31;
+            
+            let html = '<table class="table table-sm table-bordered">';
+            html += '<tr><th>ش</th><th>ی</th><th>د</th><th>س</th><th>چ</th><th>پ</th><th>ج</th></tr>';
+            
+            let dayCount = 1;
+            let firstDay = 2;
+            
+            html += '<tr>';
+            for (let i = 0; i < firstDay; i++) html += '<td></td>';
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                if ((dayCount - firstDay) % 7 === 0 && dayCount > firstDay) html += '</tr><tr>';
+                
+                const date = new Date(year, month - 1, day);
+                const dateStr = date.toISOString().split('T')[0];
+                
+                html += `<td class="calendar-day" data-date="${dateStr}" style="cursor: pointer; padding: 10px; text-align: center; border: 1px solid #ddd;">
+                    <strong>${day}</strong>
+                </td>`;
+                dayCount++;
+            }
+            
+            html += '</tr></table>';
+            $('#calendar').html(html);
+            
+            $('.calendar-day').click(function() {
+                $('.calendar-day').removeClass('bg-primary text-white');
+                $(this).addClass('bg-primary text-white');
+                selectedDate = new Date($(this).data('date'));
+                loadLogs(selectedDate);
+                updateSelectedDate();
+            });
+        }
+
+        function updateSelectedDate() {
+            const options = { year: 'numeric', month: 'long', day: 'numeric' };
+            $('#selectedDate').text(selectedDate.toLocaleDateString('fa-IR', options));
+        }
+
+        function loadLogs(date) {
+            const dateStr = date.toISOString().split('T')[0];
+            
+            $('#logsGrid').kendoGrid({
+                dataSource: {
+                    transport: {
+                        read: {
+                            url: '/ServiceRoute/Logs_Read?date=' + dateStr,
+                            dataType: 'json'
+                        },
+                        update: {
+                            url: '/ServiceRoute/Logs_Update',
+                            type: 'POST',
+                            dataType: 'json'
+                        },
+                        destroy: {
+                            url: '/ServiceRoute/Logs_Destroy',
+                            type: 'POST',
+                            dataType: 'json'
+                        }
+                    },
+                    schema: {
+                        model: {
+                            id: 'id',
+                            fields: {
+                                id: { type: 'number' },
+                                routeName: { type: 'string' },
+                                arrivalTime: { type: 'string' },
+                                departureTime: { type: 'string' },
+                                notes: { type: 'string' }
+                            }
+                        }
+                    }
+                },
+                columns: [
+                    { field: 'routeName', title: 'مسیر', width: 200 },
+                    { field: 'arrivalTime', title: 'ورود', width: 100, editor: timeEditor },
+                    { field: 'departureTime', title: 'خروج', width: 100, editor: timeEditor },
+                    { field: 'notes', title: 'توضیحات', width: 300, editor: notesEditor },
+                    { command: ['edit', 'destroy'], title: 'عملیات', width: 150 }
+                ],
+                editable: 'inline',
+                pageable: false,
+                sortable: false,
+                scrollable: false
+            });
+        }
+
+        function timeEditor(container, options) {
+            $('<input type="time" class="form-control" />')
+                .appendTo(container)
+                .val(options.model[options.field] || '')
+                .on('change', function() {
+                    options.model[options.field] = $(this).val();
+                });
+        }
+
+        function notesEditor(container, options) {
+            $('<textarea class="form-control" rows="2"></textarea>')
+                .appendTo(container)
+                .val(options.model[options.field] || '')
+                .on('change', function() {
+                    options.model[options.field] = $(this).val();
+                });
+        }
+    </script>
+
+    <style>
+        .calendar-day {
+            transition: all 0.3s;
+        }
+        .calendar-day:hover {
+            background-color: #f0f0f0;
+        }
+        .card {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+}

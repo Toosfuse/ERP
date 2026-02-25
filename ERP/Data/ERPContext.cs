@@ -85,6 +85,10 @@ namespace ERP.Data
         public DbSet<GuestVerificationCode> GuestVerificationCodes { get; set; }
         public DbSet<GuestChatAccess> GuestChatAccesses { get; set; }
 
+        public DbSet<ServiceRoute> ServiceRoutes { get; set; }
+        public DbSet<RouteStop> RouteStops { get; set; }
+        public DbSet<VehicleLog> VehicleLogs { get; set; }
+
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
@@ -313,6 +317,50 @@ namespace ERP.Data
                 entity.HasOne(e => e.AllowedUser)
                       .WithMany()
                       .HasForeignKey(e => e.AllowedUserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // ServiceRoute
+            builder.Entity<ServiceRoute>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.VehicleType).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETDATE()");
+
+                entity.HasMany(e => e.Stops)
+                      .WithOne(s => s.ServiceRoute)
+                      .HasForeignKey(s => s.ServiceRouteId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasMany(e => e.Logs)
+                      .WithOne(l => l.ServiceRoute)
+                      .HasForeignKey(l => l.ServiceRouteId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // RouteStop
+            builder.Entity<RouteStop>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+                entity.Property(e => e.Address).IsRequired().HasMaxLength(500);
+
+                entity.HasOne(e => e.ServiceRoute)
+                      .WithMany(r => r.Stops)
+                      .HasForeignKey(e => e.ServiceRouteId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // VehicleLog
+            builder.Entity<VehicleLog>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Notes).HasMaxLength(500);
+
+                entity.HasOne(e => e.ServiceRoute)
+                      .WithMany(r => r.Logs)
+                      .HasForeignKey(e => e.ServiceRouteId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
         }
